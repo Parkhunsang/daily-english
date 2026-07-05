@@ -78,7 +78,7 @@ function App() {
           <>
             <span className="nav-title">Daily English</span>
             <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-muted)" }}>
-              100일의 기적 2
+              하루 10분 영어 스피킹
             </span>
           </>
         )}

@@ -1,7 +1,7 @@
 {
-  "name": "Daily English 100일의 기적 2",
+  "name": "Daily English Speaking",
   "short_name": "Daily English",
-  "description": "영어회화 100일의 기적 2 모바일 웹 학습기",
+  "description": "하루 10분 영어 스피킹 트레이닝 모바일 웹 앱",
   "start_url": "/daily-english/",
   "display": "standalone",
   "background_color": "#F2F2F7",
