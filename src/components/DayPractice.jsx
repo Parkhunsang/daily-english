@@ -1,0 +1,613 @@
+import React, { useState, useEffect, useRef } from "react";
+import { AudioVisualizer } from "./AudioVisualizer";
+import { Confetti } from "./Confetti";
+import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
+
+export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak }) {
+  const dialogue = dayData.dialogue;
+  const dayProgress = progress[dayData.day] || {};
+
+  // Find the first uncompleted sentence index
+  const getInitialTurnIndex = () => {
+    for (let i = 0; i < dialogue.length; i++) {
+      if (dayProgress[dialogue[i].id] !== true) {
+        return i;
+      }
+    }
+    return dialogue.length; // All completed
+  };
+
+  const [activeTurnIndex, setActiveTurnIndex] = useState(getInitialTurnIndex);
+  const [revealedHints, setRevealedHints] = useState({}); // { index: boolean }
+  const [isRecording, setIsRecording] = useState(false);
+  const [recognition, setRecognition] = useState(null);
+  const [stream, setStream] = useState(null);
+  const [result, setResult] = useState(null); // { success: boolean, transcript: string }
+  const [isTyping, setIsTyping] = useState(false); // Typing indicator state
+
+  const recognitionRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // Initialize Speech Recognition
+  useEffect(() => {
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognitionClass) {
+      const rec = new SpeechRecognitionClass();
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      setRecognition(rec);
+      recognitionRef.current = rec;
+    }
+  }, []);
+
+  // Update active turn index if dayData changes
+  useEffect(() => {
+    setActiveTurnIndex(getInitialTurnIndex());
+    setResult(null);
+    setRevealedHints({});
+    setIsTyping(false);
+  }, [dayData]);
+
+  // Trigger typing indicator on B's turn change
+  useEffect(() => {
+    if (activeTurnIndex > 0 && activeTurnIndex < dialogue.length) {
+      const currentSentence = dialogue[activeTurnIndex];
+      // Only simulate typing if it's Speaker B (reply)
+      if (currentSentence && currentSentence.speaker === "B") {
+        setIsTyping(true);
+        const timer = setTimeout(() => {
+          setIsTyping(false);
+        }, 750); // 0.75 seconds typing simulation
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [activeTurnIndex]);
+
+  // Clean up recording on unmount
+  useEffect(() => {
+    return () => {
+      stopRecordingSession();
+    };
+  }, []);
+
+  const handleSpeakTTS = (text, e) => {
+    if (e) e.stopPropagation();
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const cleanText = text.replace(/\*/g, "");
+      const utterance = new SynthesisUtteranceClass(cleanText);
+      function SynthesisUtteranceClass(t) {
+        return new (window.SpeechSynthesisUtterance || window.webkitSpeechSynthesisUtterance)(t);
+      }
+      const actualUtterance = new SpeechSynthesisUtterance(cleanText);
+      actualUtterance.lang = "en-US";
+      
+      const voices = window.speechSynthesis.getVoices();
+      const usVoice = voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en"));
+      if (usVoice) {
+        actualUtterance.voice = usVoice;
+      }
+      window.speechSynthesis.speak(actualUtterance);
+    } else {
+      alert("이 브라우저는 음성 합성(TTS)을 지원하지 않습니다.");
+    }
+  };
+
+  const toggleHint = (index) => {
+    setRevealedHints(prev => ({
+      ...prev,
+      [index]: !prev[index]
+    }));
+  };
+
+  const startRecordingSession = () => {
+    if (!recognitionRef.current) {
+      alert("이 브라우저는 음성 인식을 지원하지 않습니다. 크롬이나 사파리를 사용해 주세요.");
+      return;
+    }
+
+    setResult(null);
+    setIsRecording(true);
+
+    try {
+      const ctx = getSharedAudioContext();
+      if (ctx && ctx.state === "suspended") {
+        ctx.resume();
+      }
+    } catch (e) {
+      console.log("AudioContext resume error on user gesture:", e);
+    }
+
+    try {
+      const rec = recognitionRef.current;
+
+      rec.onstart = () => {
+        console.log("Speech recognition started");
+      };
+
+      rec.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        if (event.error !== "no-speech") {
+          setIsRecording(false);
+          stopMicStream();
+        }
+      };
+
+      rec.onend = () => {
+        console.log("Speech recognition ended");
+        setIsRecording(false);
+        stopMicStream();
+      };
+
+      rec.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        processSpeechResult(transcript);
+      };
+
+      rec.start();
+    } catch (err) {
+      console.error("Failed to start SpeechRecognition", err);
+      setIsRecording(false);
+      stopMicStream();
+      return;
+    }
+
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((audioStream) => {
+        streamRef.current = audioStream;
+        setStream(audioStream);
+      })
+      .catch((err) => {
+        console.error("Failed to get microphone stream for visualizer", err);
+      });
+  };
+
+  const stopRecordingSession = () => {
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop();
+      } catch (e) {}
+    }
+    setIsRecording(false);
+    stopMicStream();
+  };
+
+  const stopMicStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    setStream(null);
+  };
+
+  const normalizeText = (text) => {
+    if (!text) return "";
+    let clean = text.toLowerCase()
+      .replace(/\*/g, "") // Remove asterisks
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "") // Strip punctuation
+      .replace(/\s+/g, " ") // Clean double spaces
+      .trim();
+    
+    const contractions = {
+      "i'll": "i will",
+      "ill": "i will",
+      "don't": "do not",
+      "dont": "do not",
+      "isn't": "is not",
+      "isnt": "is not",
+      "i'm": "i am",
+      "im": "i am",
+      "you're": "you are",
+      "youre": "you are",
+      "let's": "let us",
+      "lets": "let us",
+      "we've": "we have",
+      "weve": "we have",
+      "can't": "cannot",
+      "cant": "can not",
+      "it's": "it is",
+      "its": "it is"
+    };
+    
+    const words = clean.split(" ");
+    const expanded = words.map(w => contractions[w] || w);
+    return expanded.join(" ");
+  };
+
+  // Word-level Levenshtein Distance similarity
+  const getSimilarity = (s1, s2) => {
+    if (!s1 || !s2) return 0;
+    const words1 = s1.split(" ");
+    const words2 = s2.split(" ");
+    
+    const track = Array(words2.length + 1).fill(null).map(() =>
+      Array(words1.length + 1).fill(null)
+    );
+    for (let i = 0; i <= words1.length; i += 1) track[0][i] = i;
+    for (let j = 0; j <= words2.length; j += 1) track[j][0] = j;
+    
+    for (let j = 1; j <= words2.length; j += 1) {
+      for (let i = 1; i <= words1.length; i += 1) {
+        const indicator = words1[i - 1] === words2[j - 1] ? 0 : 1;
+        track[j][i] = Math.min(
+          track[j - 1][i] + 1, // deletion
+          track[j][i - 1] + 1, // insertion
+          track[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+    const distance = track[words2.length][words1.length];
+    const maxLength = Math.max(words1.length, words2.length);
+    return (maxLength - distance) / maxLength;
+  };
+
+  const processSpeechResult = (spokenText) => {
+    const activeSentence = dialogue[activeTurnIndex];
+    if (!activeSentence) return;
+
+    const normalizedSpoken = normalizeText(spokenText);
+    const normalizedCorrect = normalizeText(activeSentence.en);
+
+    const similarity = getSimilarity(normalizedSpoken, normalizedCorrect);
+    // Allow minor typos or transcription errors (70% or higher match is correct)
+    const isCorrect = similarity >= 0.70;
+
+    if (isCorrect) {
+      playSuccessSound();
+      onMarkSentenceCorrect(dayData.day, activeSentence.id, true);
+      
+      setResult({
+        success: true,
+        transcript: spokenText,
+        score: Math.round(similarity * 100)
+      });
+      
+      setTimeout(() => {
+        setActiveTurnIndex(prev => prev + 1);
+        setResult(null);
+      }, 1400);
+
+    } else {
+      playFailureSound();
+      setResult({
+        success: false,
+        transcript: spokenText,
+        score: Math.round(similarity * 100)
+      });
+    }
+  };
+
+  const handleReset = () => {
+    dialogue.forEach(item => {
+      onMarkSentenceCorrect(dayData.day, item.id, false);
+    });
+    setActiveTurnIndex(0);
+    setResult(null);
+    setRevealedHints({});
+    setIsTyping(false);
+  };
+
+  const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
+  const isCompleted = activeTurnIndex === dialogue.length;
+
+  if (mode === "preview") {
+    return (
+      <div className="preview-layout">
+        <div className="preview-scroll-container">
+          <div className="preview-intro-card">
+            <h3>📖 전체 대화 대본</h3>
+            <p>훈련 전에 대본을 읽어보고 재생 버튼을 눌러 원어민 발음을 들어보세요.</p>
+          </div>
+          
+          <div className="preview-dialogue-list">
+            {dialogue.map((item) => (
+              <div key={item.id} className={`preview-msg-row ${item.speaker}`}>
+                <div className="preview-speaker-label">
+                  {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                </div>
+                <div className="preview-bubble" onClick={(e) => handleSpeakTTS(item.en, e)}>
+                  <div className="ko">{item.ko}</div>
+                  <div className="en">{item.en.replace(/\*/g, "")}</div>
+                  <button className="preview-tts-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 8V16C15.48 15.29 16.5 13.77 16.5 12Z" fill="currentColor"/>
+                    </svg>
+                    듣기
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+          
+          <div className="preview-footer-action">
+            <button className="duo-btn-primary" onClick={onSwitchToSpeak}>
+              실전 말하기 훈련 시작 🎙️
+            </button>
+            <button className="duo-btn-secondary" style={{ marginTop: "8px" }} onClick={onBack}>
+              대시보드로 돌아가기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="practice-layout">
+      {/* Confetti Celebration Particle Effect */}
+      <Confetti active={isCompleted} />
+
+      {/* Stepper Header (Duolingo Style) */}
+      {!isCompleted && (
+        <div className="duo-stepper-header">
+          <button className="duo-close-btn" onClick={onBack} title="종료">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="currentColor"/>
+            </svg>
+          </button>
+          
+          <div className="duo-progress-container">
+            <div 
+              className="duo-progress-fill" 
+              style={{ width: `${(activeTurnIndex / dialogue.length) * 100}%` }}
+            />
+          </div>
+          
+          <span className="duo-progress-text">
+            {activeTurnIndex}/{dialogue.length}
+          </span>
+        </div>
+      )}
+
+      {/* Card Stage / Carousel View */}
+      {!isCompleted ? (
+        <div className="duo-card-stage">
+          {dialogue.map((item, index) => {
+            const isActive = index === activeTurnIndex;
+            const isPassed = index < activeTurnIndex;
+            
+            let transformClass = "";
+            if (isActive) transformClass = "active";
+            else if (isPassed) transformClass = "passed";
+            else transformClass = "future";
+
+            const isRevealed = revealedHints[index] === true;
+
+            return (
+              <div 
+                key={item.id} 
+                className={`duo-dialogue-card ${transformClass} ${item.speaker}`}
+              >
+                <div className={`duo-speaker-badge ${item.speaker}`}>
+                  {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                </div>
+                
+                {isActive && isTyping ? (
+                  /* B Typing Indicator inside B's Card */
+                  <div className="duo-card-typing">
+                    <span className="duo-typing-label">대답을 생각하는 중</span>
+                    <div className="typing-indicator">
+                      <span></span>
+                      <span></span>
+                      <span></span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="duo-ko-text">"{item.ko}"</div>
+                    
+                    {/* English Hint / Target reveal */}
+                    <div 
+                      className="duo-en-hint-box" 
+                      onClick={() => isActive && toggleHint(index)}
+                    >
+                      {isRevealed ? (
+                        <div className="duo-en-text">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/>
+                          </svg>
+                          {item.en.replace(/\*/g, "")}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="duo-en-text blurred">
+                            {item.en.replace(/\*/g, "")}
+                          </div>
+                          <div className="duo-lock-hint">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M18 8H17V6C17 3.24 14.76 1 12 1C9.24 1 7 3.24 7 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8ZM9 6C9 4.34 10.34 3 12 3C13.66 3 15 4.34 15 6V8H9V6ZM18 20H6V10H18V20ZM12 13C10.9 13 10 13.9 10 15C10 16.1 10.9 17 12 17C13.1 17 14 16.1 14 15C14 13.9 13.1 13 12 13Z" fill="currentColor"/>
+                            </svg>
+                            터치하여 영어 힌트 보기
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* ---------------------------------------------------- */
+        /* Duolingo-Style Completion View                       */
+        /* ---------------------------------------------------- */
+        <div className="duo-completion-view">
+          <div className="duo-radial-progress-wrapper">
+            <div className="duo-radial-progress">
+              <svg className="duo-radial-svg" viewBox="0 0 100 100">
+                <circle className="circle-bg" cx="50" cy="50" r="40" />
+                <circle className="circle-fill" cx="50" cy="50" r="40" />
+              </svg>
+              <div className="duo-radial-inner">
+                <svg width="34" height="34" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+
+          <h2 className="duo-completion-title">오늘의 대화 완료!</h2>
+          <p className="duo-completion-subtitle">
+            Day {dayData.day}의 모든 훈련을 성공적으로 마쳤습니다.
+          </p>
+
+          {/* Stats Box */}
+          <div className="duo-stats-row">
+            <div className="duo-stat-card">
+              <div className="duo-stat-val">6 / 6</div>
+              <div className="duo-stat-lbl">연습 문장</div>
+            </div>
+            <div className="duo-stat-card">
+              <div className="duo-stat-val">100%</div>
+              <div className="duo-stat-lbl">학습 성공률</div>
+            </div>
+          </div>
+
+          {/* Vocabulary Review Section */}
+          <div className="duo-review-card">
+            <h3 className="duo-review-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 3L1 9L12 15L21 10.09V17H23V9L12 3ZM12 5.18L18.97 9L12 12.82L5.03 9L12 5.18ZM12 17.3L5 13.7V17L12 20.3L19 17V13.7L12 17.3Z" fill="currentColor"/>
+              </svg>
+              핵심 표현 오디오 복습
+            </h3>
+            <div className="duo-review-list">
+              {dayData.vocabulary.map((vocab, index) => (
+                <div key={index} className="duo-review-item">
+                  <div className="duo-vocab-info">
+                    <span className="duo-vocab-phrase">{vocab.phrase}</span>
+                    <span className="duo-vocab-meaning">{vocab.meaning}</span>
+                  </div>
+                  <button 
+                    className="duo-vocab-listen-btn" 
+                    onClick={(e) => handleSpeakTTS(vocab.phrase, e)}
+                    title="원어민 발음 듣기"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 8V16C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z" fill="currentColor"/>
+                    </svg>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Action Footer Buttons */}
+          <div className="duo-actions">
+            <button className="duo-btn-primary" onClick={onBack}>
+              계속하기
+            </button>
+            <button className="duo-btn-secondary" onClick={handleReset}>
+              다시 연습하기
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Fixed Bottom Control Bar (Hidden when complete) */}
+      {!isCompleted && (
+        <div className={`bottom-control-panel ${isRecording || result || isTyping ? "expanded" : ""}`}>
+          
+          {isTyping ? (
+            /* B is Typing Placeholder */
+            <div className="prompt-box" style={{ background: "none" }}>
+              <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                <span>상대방이 대답할 말을 적는 중</span>
+                <span className="typing-indicator" style={{ display: "inline-flex" }}>
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </span>
+              </div>
+            </div>
+          ) : (
+            /* Normal Interactive Controls */
+            <>
+              {/* Active Prompt */}
+              <div className="prompt-box">
+                <div className="prompt-title">말해야 할 한글 문장</div>
+                <div className="prompt-text">"{activeSentence?.ko}"</div>
+              </div>
+
+              {/* Dynamic Audio Visualizer or Speech Feedbacks */}
+              <div className={`visualizer-box ${result ? "has-result" : ""}`}>
+                {isRecording && (
+                  <AudioVisualizer stream={stream} isRecording={isRecording} />
+                )}
+                
+                {!isRecording && !result && (
+                  <span className="visualizer-placeholder">아래 마이크 버튼을 눌러 말해보세요</span>
+                )}
+                
+                {!isRecording && result && (
+                  <div style={{ width: "100%" }}>
+                    {result.success ? (
+                      <div className="panel-feedback success" style={{ color: "var(--success-color)", fontWeight: "bold", textAlign: "center" }}>
+                        정답입니다!
+                      </div>
+                    ) : (
+                      <div className="panel-feedback error">
+                        <strong>인식 결과: "{result.transcript || "(아무 소리도 인식 안 됨)"}"</strong>
+                        정답 문장: {activeSentence?.en.replace(/\*/g, "")}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Action Row */}
+              <div className="actions-row">
+                {/* Hint Button */}
+                <button 
+                  className={`btn-action-side hint ${revealedHints[activeTurnIndex] ? "hint-active" : ""}`}
+                  onClick={() => toggleHint(activeTurnIndex)}
+                  title="힌트 보기"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 4.5C7 4.5 2.73 7.61 1 12C2.73 16.39 7 19.5 12 19.5C17 19.5 21.27 16.39 23 12C21.27 7.61 17 4.5 12 4.5ZM12 17C9.24 17 7 14.76 7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12C17 14.76 14.76 17 12 17ZM12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9Z" fill="currentColor"/>
+                  </svg>
+                </button>
+
+                {/* Mic Toggle Button */}
+                <button 
+                  className={`btn-mic-main ${isRecording ? "recording" : ""}`}
+                  onClick={isRecording ? stopRecordingSession : startRecordingSession}
+                >
+                  {isRecording ? (
+                    <>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 19H10V5H6V19ZM14 5v14h4V5h-4Z" fill="currentColor"/>
+                      </svg>
+                      완료하기
+                    </>
+                  ) : (
+                    <>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 14C13.66 14 15 12.66 15 11V5C15 3.34 13.66 2 12 2C10.34 2 9 3.34 9 5V11C9 12.66 10.34 14 12 14ZM17.3 11C17.3 14 14.76 16.1 12 16.1C9.24 16.1 6.7 14 6.7 11H5C5 14.41 7.72 17.23 11 17.72V21H13V17.72C16.28 17.23 19 14.41 19 11H17.3Z" fill="currentColor"/>
+                      </svg>
+                      말하기
+                    </>
+                  )}
+                </button>
+
+                {/* Listen Pronunciation Button */}
+                <button 
+                  className="btn-action-side listen"
+                  onClick={() => activeSentence && handleSpeakTTS(activeSentence.en)}
+                  title="원어민 발음 듣기"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 8V16C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z" fill="currentColor"/>
+                  </svg>
+                </button>
+              </div>
+            </>
+          )}
+
+        </div>
+      )}
+    </div>
+  );
+}
