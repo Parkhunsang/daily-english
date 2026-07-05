@@ -55,7 +55,9 @@ export function DayList({ data, onSelectDay, progress }) {
               <h2 className="day-title">{dayData.title}</h2>
               <div className="day-key-expr">
                 <div className="key-label">오늘의 핵심 표현</div>
-                <div className="key-text">{dayData.keyExpression.ko}</div>
+                <div className="key-text">
+                  {dayData.keyExpression?.ko || (dayData.vocabulary && dayData.vocabulary[0] ? `"${dayData.vocabulary[0].phrase}"` : "오늘의 학습")}
+                </div>
               </div>
             </div>
           );
