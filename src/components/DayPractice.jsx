@@ -20,26 +20,12 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const [activeTurnIndex, setActiveTurnIndex] = useState(getInitialTurnIndex);
   const [revealedHints, setRevealedHints] = useState({}); // { index: boolean }
   const [isRecording, setIsRecording] = useState(false);
-  const [recognition, setRecognition] = useState(null);
   const [stream, setStream] = useState(null);
   const [result, setResult] = useState(null); // { success: boolean, transcript: string }
   const [isTyping, setIsTyping] = useState(false); // Typing indicator state
 
-  const recognitionRef = useRef(null);
+  const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
-
-  // Initialize Speech Recognition
-  useEffect(() => {
-    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognitionClass) {
-      const rec = new SpeechRecognitionClass();
-      rec.lang = "en-US";
-      rec.interimResults = false;
-      rec.maxAlternatives = 1;
-      setRecognition(rec);
-      recognitionRef.current = rec;
-    }
-  }, []);
 
   // Update active turn index if dayData changes
   useEffect(() => {
@@ -102,11 +88,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   };
 
   const startRecordingSession = () => {
-    if (!recognitionRef.current) {
-      alert("이 브라우저는 음성 인식을 지원하지 않습니다. 크롬이나 사파리를 사용해 주세요.");
-      return;
-    }
-
     setResult(null);
     setIsRecording(true);
 
@@ -119,8 +100,19 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       console.log("AudioContext resume error on user gesture:", e);
     }
 
+    const SpeechRecognitionClass = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognitionClass) {
+      alert("이 브라우저는 음성 인식을 지원하지 않습니다. 크롬이나 사파리를 사용해 주세요.");
+      setIsRecording(false);
+      return;
+    }
+
     try {
-      const rec = recognitionRef.current;
+      const rec = new SpeechRecognitionClass();
+      rec.lang = "en-US";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      recognitionInstanceRef.current = rec;
 
       rec.onstart = () => {
         console.log("Speech recognition started");
@@ -153,21 +145,26 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then((audioStream) => {
-        streamRef.current = audioStream;
-        setStream(audioStream);
-      })
-      .catch((err) => {
-        console.error("Failed to get microphone stream for visualizer", err);
-      });
+    // Delay visualizer's getUserMedia request by 150ms to prevent iOS hardware mic lockup
+    setTimeout(() => {
+      if (!recognitionInstanceRef.current) return;
+      navigator.mediaDevices.getUserMedia({ audio: true })
+        .then((audioStream) => {
+          streamRef.current = audioStream;
+          setStream(audioStream);
+        })
+        .catch((err) => {
+          console.error("Failed to get microphone stream for visualizer", err);
+        });
+    }, 150);
   };
 
   const stopRecordingSession = () => {
-    if (recognitionRef.current) {
+    if (recognitionInstanceRef.current) {
       try {
-        recognitionRef.current.stop();
+        recognitionInstanceRef.current.stop();
       } catch (e) {}
+      recognitionInstanceRef.current = null;
     }
     setIsRecording(false);
     stopMicStream();
