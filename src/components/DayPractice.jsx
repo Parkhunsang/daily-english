@@ -17,23 +17,35 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     return dialogue.length; // All completed
   };
 
-  const [activeTurnIndex, setActiveTurnIndex] = useState(getInitialTurnIndex);
+  const [activeTurnIndex, setActiveTurnIndex] = useState(() => {
+    return mode === "test" ? 0 : getInitialTurnIndex();
+  });
   const [revealedHints, setRevealedHints] = useState({}); // { index: boolean }
   const [isRecording, setIsRecording] = useState(false);
   const [stream, setStream] = useState(null);
   const [result, setResult] = useState(null); // { success: boolean, transcript: string }
   const [isTyping, setIsTyping] = useState(false); // Typing indicator state
 
+  // Test Mode States
+  const [hearts, setHearts] = useState(3);
+  const [testStatus, setTestStatus] = useState("playing"); // "playing" | "passed" | "failed"
+
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
 
-  // Update active turn index if dayData changes
+  // Update active turn index if dayData changes or mode changes
   useEffect(() => {
-    setActiveTurnIndex(getInitialTurnIndex());
+    if (mode === "test") {
+      setActiveTurnIndex(0);
+      setHearts(3);
+      setTestStatus("playing");
+    } else {
+      setActiveTurnIndex(getInitialTurnIndex());
+    }
     setResult(null);
     setRevealedHints({});
     setIsTyping(false);
-  }, [dayData]);
+  }, [dayData, mode]);
 
   // Trigger typing indicator on B's turn change
   useEffect(() => {
@@ -247,7 +259,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     const normalizedCorrect = normalizeText(activeSentence.en);
 
     const similarity = getSimilarity(normalizedSpoken, normalizedCorrect);
-    // Allow minor typos or transcription errors (70% or higher match is correct)
     const isCorrect = similarity >= 0.70;
 
     if (isCorrect) {
@@ -261,12 +272,29 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       });
       
       setTimeout(() => {
-        setActiveTurnIndex(prev => prev + 1);
+        if (mode === "test" && activeTurnIndex === dialogue.length - 1) {
+          setTestStatus("passed");
+        } else {
+          setActiveTurnIndex(prev => prev + 1);
+        }
         setResult(null);
       }, 1400);
 
     } else {
       playFailureSound();
+      
+      if (mode === "test") {
+        setHearts(prev => {
+          const nextHearts = prev - 1;
+          if (nextHearts === 0) {
+            setTimeout(() => {
+              setTestStatus("failed");
+            }, 1400);
+          }
+          return nextHearts;
+        });
+      }
+
       setResult({
         success: false,
         transcript: spokenText,
@@ -287,6 +315,93 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
+
+  if (mode === "test" && testStatus !== "playing") {
+    const isPassed = testStatus === "passed";
+    let score = 0;
+    let medal = "";
+    let medalText = "";
+    
+    if (isPassed) {
+      if (hearts === 3) { score = 100; medal = "🥇"; medalText = "금메달 (완벽해요!)"; }
+      else if (hearts === 2) { score = 85; medal = "🥈"; medalText = "은메달 (훌륭해요!)"; }
+      else { score = 70; medal = "🥉"; medalText = "동메달 (패스!)"; }
+    }
+
+    return (
+      <div className="practice-layout">
+        <div className="duo-report-container" style={{ padding: "30px 20px" }}>
+          {isPassed ? (
+            <>
+              <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
+                {medal}
+              </div>
+              <h2 className="duo-report-title" style={{ color: "var(--success-color)", fontSize: "24px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
+                스피킹 시험 합격!
+              </h2>
+              <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
+                {medalText}
+              </p>
+              
+              <div className="duo-report-stats" style={{ display: "flex", gap: "12px", justifyContent: "center", margin: "24px 0" }}>
+                <div className="duo-stat-card" style={{ flex: 1, padding: "16px", borderRadius: "18px", border: "2px solid var(--border-color)", textAlign: "center", background: "#FFFFFF" }}>
+                  <div className="duo-stat-label" style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "700" }}>최종 점수</div>
+                  <div className="duo-stat-val" style={{ fontSize: "26px", fontWeight: "850", color: "var(--success-color)", marginTop: "4px" }}>{score}점</div>
+                </div>
+                <div className="duo-stat-card" style={{ flex: 1, padding: "16px", borderRadius: "18px", border: "2px solid var(--border-color)", textAlign: "center", background: "#FFFFFF" }}>
+                  <div className="duo-stat-label" style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "700" }}>남은 하트</div>
+                  <div className="duo-stat-val" style={{ fontSize: "26px", fontWeight: "850", color: "#FF9500", marginTop: "4px" }}>{hearts} / 3</div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
+                😢
+              </div>
+              <h2 className="duo-report-title" style={{ color: "#FF3B30", fontSize: "24px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
+                아쉽게도 탈락했습니다...
+              </h2>
+              <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
+                하트 3개를 모두 잃었습니다. 조금만 더 연습해 볼까요?
+              </p>
+            </>
+          )}
+
+          <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: "750", marginBottom: "12px" }}>오늘의 대화 복습</h3>
+            <div className="duo-review-list" style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
+              {dialogue.map((item) => (
+                <div key={item.id} className="duo-review-item" style={{ background: "#FFFFFF", padding: "10px 12px", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.04)" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-muted)", display: "block", marginBottom: "2px" }}>
+                    {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                  </span>
+                  <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-secondary)" }}>{item.ko}</div>
+                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--accent-color)", marginTop: "2px" }}>{item.en.replace(/\*/g, "")}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="duo-report-actions" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px" }}>
+            <button 
+              className="duo-btn-primary" 
+              onClick={() => {
+                setHearts(3);
+                setActiveTurnIndex(0);
+                setTestStatus("playing");
+              }}
+            >
+              {isPassed ? "다시 도전하기 🏆" : "재시험 치기 🔄"}
+            </button>
+            <button className="duo-btn-secondary" onClick={onBack}>
+              대시보드로 돌아가기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (mode === "preview") {
     return (
@@ -354,6 +469,16 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           <span className="duo-progress-text">
             {activeTurnIndex}/{dialogue.length}
           </span>
+          
+          {mode === "test" && (
+            <div className="duo-hearts-display" style={{ display: "flex", gap: "4px", marginLeft: "12px", alignItems: "center" }}>
+              {Array(3).fill(null).map((_, i) => (
+                <span key={i} style={{ fontSize: "16px", opacity: i < hearts ? 1 : 0.25, transition: "opacity 0.2s" }}>
+                  ❤️
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -395,31 +520,33 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                     <div className="duo-ko-text">"{item.ko}"</div>
                     
                     {/* English Hint / Target reveal */}
-                    <div 
-                      className="duo-en-hint-box" 
-                      onClick={() => isActive && toggleHint(index)}
-                    >
-                      {isRevealed ? (
-                        <div className="duo-en-text">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/>
-                          </svg>
-                          {item.en.replace(/\*/g, "")}
-                        </div>
-                      ) : (
-                        <>
-                          <div className="duo-en-text blurred">
+                    {mode !== "test" && (
+                      <div 
+                        className="duo-en-hint-box" 
+                        onClick={() => isActive && toggleHint(index)}
+                      >
+                        {isRevealed ? (
+                          <div className="duo-en-text">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                              <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM13 17H11V15H13V17ZM13 13H11V7H13V13Z" fill="currentColor"/>
+                            </svg>
                             {item.en.replace(/\*/g, "")}
                           </div>
-                          <div className="duo-lock-hint">
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                              <path d="M18 8H17V6C17 3.24 14.76 1 12 1C9.24 1 7 3.24 7 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8ZM9 6C9 4.34 10.34 3 12 3C13.66 3 15 4.34 15 6V8H9V6ZM18 20H6V10H18V20ZM12 13C10.9 13 10 13.9 10 15C10 16.1 10.9 17 12 17C13.1 17 14 16.1 14 15C14 13.9 13.1 13 12 13Z" fill="currentColor"/>
-                            </svg>
-                            터치하여 영어 힌트 보기
-                          </div>
-                        </>
-                      )}
-                    </div>
+                        ) : (
+                          <>
+                            <div className="duo-en-text blurred">
+                              {item.en.replace(/\*/g, "")}
+                            </div>
+                            <div className="duo-lock-hint">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M18 8H17V6C17 3.24 14.76 1 12 1C9.24 1 7 3.24 7 6V8H6C4.9 8 4 8.9 4 10V20C4 21.1 4.9 22 6 22H18C19.1 22 20 21.1 20 20V10C20 8.9 19.1 8 18 8ZM9 6C9 4.34 10.34 3 12 3C13.66 3 15 4.34 15 6V8H9V6ZM18 20H6V10H18V20ZM12 13C10.9 13 10 13.9 10 15C10 16.1 10.9 17 12 17C13.1 17 14 16.1 14 15C14 13.9 13.1 13 12 13Z" fill="currentColor"/>
+                              </svg>
+                              터치하여 영어 힌트 보기
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -547,7 +674,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                     ) : (
                       <div className="panel-feedback error">
                         <strong>인식 결과: "{result.transcript || "(아무 소리도 인식 안 됨)"}"</strong>
-                        정답 문장: {activeSentence?.en.replace(/\*/g, "")}
+                        {mode !== "test" && <>정답 문장: {activeSentence?.en.replace(/\*/g, "")}</>}
                       </div>
                     )}
                   </div>
@@ -561,6 +688,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                   className={`btn-action-side hint ${revealedHints[activeTurnIndex] ? "hint-active" : ""}`}
                   onClick={() => toggleHint(activeTurnIndex)}
                   title="힌트 보기"
+                  style={{ visibility: mode === "test" ? "hidden" : "visible" }}
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M12 4.5C7 4.5 2.73 7.61 1 12C2.73 16.39 7 19.5 12 19.5C17 19.5 21.27 16.39 23 12C21.27 7.61 17 4.5 12 4.5ZM12 17C9.24 17 7 14.76 7 12C7 9.24 9.24 7 12 7C14.76 7 17 9.24 17 12C17 14.76 14.76 17 12 17ZM12 9C10.34 9 9 10.34 9 12C9 13.66 10.34 15 12 15C13.66 15 15 13.66 15 12C15 10.34 13.66 9 12 9Z" fill="currentColor"/>
@@ -594,6 +722,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                   className="btn-action-side listen"
                   onClick={() => activeSentence && handleSpeakTTS(activeSentence.en)}
                   title="원어민 발음 듣기"
+                  style={{ visibility: mode === "test" ? "hidden" : "visible" }}
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 8V16C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z" fill="currentColor"/>

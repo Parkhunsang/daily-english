@@ -133,8 +133,12 @@ function App() {
               </svg>
               뒤로
             </button>
-            <span className="nav-title" style={{ fontSize: "15px", fontWeight: "700" }}>
-              {practiceMode === "preview" ? "대화문 미리보기" : `Day ${displayedDayData.day} - ${displayedDayData.title}`}
+             <span className="nav-title" style={{ fontSize: "15px", fontWeight: "700" }}>
+              {practiceMode === "preview" 
+                ? "대화문 미리보기" 
+                : practiceMode === "test" 
+                  ? `Day ${displayedDayData.day} - 스피킹 시험 🏆` 
+                  : `Day ${displayedDayData.day} - ${displayedDayData.title}`}
             </span>
           </>
         ) : (
@@ -266,6 +270,25 @@ function App() {
                 <div className="text-box">
                   <span className="title">실전 스피킹 훈련</span>
                   <span className="desc">한 문장씩 영어로 말하며 채점 훈련을 시작합니다.</span>
+                </div>
+              </button>
+              
+              <button 
+                className="duo-sheet-btn test"
+                onClick={() => {
+                  setPracticeMode("test");
+                  setActiveDay(selectedDayForSheet);
+                  setSelectedDayForSheet(null);
+                }}
+                style={{
+                  borderColor: "#FF9500",
+                  background: "rgba(255, 149, 0, 0.02)"
+                }}
+              >
+                <div className="icon-box">🏆</div>
+                <div className="text-box">
+                  <span className="title" style={{ color: "#FF9500" }}>도전! 스피킹 시험</span>
+                  <span className="desc">힌트 없이 하트 3개로 내 실력을 검증합니다.</span>
                 </div>
               </button>
             </div>
