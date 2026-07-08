@@ -4,20 +4,26 @@ import { DayList } from "./components/DayList";
 import { DayPractice } from "./components/DayPractice";
 
 function App() {
+  const [dayDataList, setDayDataList] = useState(DAILY_DATA);
   const [activeDay, setActiveDay] = useState(null);
   const [progress, setProgress] = useState({});
   const [selectedDayForSheet, setSelectedDayForSheet] = useState(null);
   const [practiceMode, setPracticeMode] = useState("speak"); // "preview" or "speak"
+  const [showSettings, setShowSettings] = useState(false);
 
-  // Load progress from LocalStorage on mount
+  // Load progress and custom dialogues from LocalStorage on mount
   useEffect(() => {
     try {
       const storedProgress = localStorage.getItem("daily_english_progress");
       if (storedProgress) {
         setProgress(JSON.parse(storedProgress));
       }
+      const storedCustomData = localStorage.getItem("daily_english_custom_dialogues");
+      if (storedCustomData) {
+        setDayDataList(JSON.parse(storedCustomData));
+      }
     } catch (e) {
-      console.error("Failed to load progress from localStorage", e);
+      console.error("Failed to load data from localStorage", e);
     }
   }, []);
 
@@ -44,18 +50,75 @@ function App() {
       return newProgress;
     });
   };
+  const handleImportJSON = (event) => {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        
+        if (!Array.isArray(parsed)) {
+          throw new Error("데이터 형식이 올바르지 않습니다. (배열 형태여야 함)");
+        }
+        if (parsed.length > 0 && (!parsed[0].day || !parsed[0].title || !parsed[0].dialogue)) {
+          throw new Error("필수 학습 속성(day, title, dialogue)이 누락되었습니다.");
+        }
+
+        localStorage.setItem("daily_english_custom_dialogues", JSON.stringify(parsed));
+        setDayDataList(parsed);
+        
+        localStorage.removeItem("daily_english_progress");
+        setProgress({});
+        
+        alert(`총 ${parsed.length}일치의 대본 데이터가 성공적으로 탑재되었습니다!`);
+        setShowSettings(false);
+      } catch (err) {
+        alert(`불러오기 실패: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+    event.target.value = "";
+  };
+
+  const handleExportJSON = () => {
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dayDataList, null, 2));
+      const downloadAnchor = document.createElement("a");
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", "daily_english_dialogues.json");
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (e) {
+      alert("대본 내보내기에 실패했습니다.");
+    }
+  };
+
+  const handleResetDefaultData = () => {
+    if (window.confirm("현재 설정된 대본을 모두 지우고, 기본 10일치 일상 대본으로 복원하시겠습니까?\n(진행률 등 모든 기록도 초기화됩니다.)")) {
+      localStorage.removeItem("daily_english_custom_dialogues");
+      localStorage.removeItem("daily_english_progress");
+      setDayDataList(DAILY_DATA);
+      setProgress({});
+      alert("기본 대본으로 복원이 완료되었습니다.");
+      setShowSettings(false);
+    }
+  };
+
   const [displayedDayData, setDisplayedDayData] = useState(null);
 
-  // Sync displayed day data when activeDay changes (keep it during slide-out animation)
+  // Sync displayed day data when activeDay changes
   useEffect(() => {
     if (activeDay) {
-      const data = DAILY_DATA.find((d) => d.day === activeDay);
+      const data = dayDataList.find((d) => d.day === activeDay);
       setDisplayedDayData(data);
     }
-  }, [activeDay]);
+  }, [activeDay, dayDataList]);
 
   const selectedDayForSheetData = selectedDayForSheet
-    ? DAILY_DATA.find((d) => d.day === selectedDayForSheet)
+    ? dayDataList.find((d) => d.day === selectedDayForSheet)
     : null;
 
   return (
@@ -76,10 +139,33 @@ function App() {
           </>
         ) : (
           <>
-            <span className="nav-title">Daily English</span>
-            <span style={{ fontSize: "14px", fontWeight: "600", color: "var(--text-muted)" }}>
-              하루 10분 영어 스피킹
-            </span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <span className="nav-title">Daily English</span>
+              <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-muted)" }}>
+                하루 10분 영어 스피킹
+              </span>
+            </div>
+            
+            <button 
+              className="btn-settings-gear"
+              onClick={() => setShowSettings(true)}
+              title="설정 및 대본 가져오기"
+              style={{
+                background: "none",
+                border: "none",
+                color: "var(--text-primary)",
+                cursor: "pointer",
+                padding: "8px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                transition: "transform 0.2s ease"
+              }}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M19.43 12.98C19.47 12.66 19.5 12.34 19.5 12C19.5 11.66 19.47 11.34 19.43 11.02L21.54 9.37C21.73 9.22 21.78 8.95 21.66 8.73L19.66 5.27C19.54 5.05 19.27 4.97 19.05 5.05L16.56 6.05C16.04 5.65 15.48 5.32 14.87 5.07L14.49 2.42C14.46 2.18 14.25 2 14 2H10C9.75 2 9.54 2.18 9.51 2.42L9.13 5.07C8.52 5.32 7.96 5.66 7.44 6.05L4.95 5.05C4.73 4.96 4.46 5.05 4.34 5.27L2.34 8.73C2.21 8.95 2.27 9.22 2.46 9.37L4.57 11.02C4.53 11.34 4.5 11.67 4.5 12C4.5 12.33 4.53 12.66 4.57 12.98L2.46 14.63C2.27 14.78 2.21 15.05 2.34 15.27L4.34 18.73C4.46 18.95 4.73 19.03 4.95 18.95L7.44 17.95C7.96 18.35 8.52 18.68 9.13 18.93L9.51 21.58C9.54 21.82 9.75 22 10 22H14C14.25 22 14.46 21.82 14.49 21.58L14.87 18.93C15.48 18.68 16.04 18.34 16.56 17.95L19.05 18.95C19.27 19.04 19.54 18.95 19.66 18.73L21.66 15.27C21.78 15.05 21.73 14.78 21.54 14.63L19.43 12.98ZM12 15.5C10.07 15.5 8.5 13.93 8.5 12C8.5 10.07 10.07 8.5 12 8.5C13.93 8.5 15.5 10.07 15.5 12C15.5 13.93 13.93 15.5 12 15.5Z" fill="currentColor"/>
+              </svg>
+            </button>
           </>
         )}
       </header>
@@ -103,7 +189,7 @@ function App() {
               </div>
               
               <DayList
-                data={DAILY_DATA}
+                data={dayDataList}
                 onSelectDay={setSelectedDayForSheet}
                 progress={progress}
               />
@@ -185,6 +271,63 @@ function App() {
             </div>
           </>
         )}
+      </div>
+
+      {/* Settings Bottom Sheet Backdrop */}
+      {showSettings && (
+        <div 
+          className="duo-sheet-backdrop" 
+          onClick={() => setShowSettings(false)}
+        />
+      )}
+
+      {/* Settings Bottom Sheet Panel */}
+      <div className={`duo-bottom-sheet ${showSettings ? "open" : ""}`} style={{ paddingBottom: "calc(var(--safe-bottom) + 30px)" }}>
+        <div className="duo-sheet-handle"></div>
+        <div className="duo-sheet-header">
+          <span className="duo-sheet-day">SETTINGS</span>
+          <h3 className="duo-sheet-title">학습 설정 및 관리</h3>
+        </div>
+
+        <div className="duo-settings-description" style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", lineHeight: "1.45" }}>
+          개인 소장 중인 대본 파일(JSON)을 불러와 공부하거나,<br/>
+          공유용 대본 데이터를 백업 및 리셋할 수 있습니다.
+        </div>
+
+        <div className="duo-sheet-actions">
+          {/* Import JSON Button */}
+          <label className="duo-sheet-btn" style={{ cursor: "pointer" }}>
+            <input 
+              type="file" 
+              accept=".json" 
+              onChange={handleImportJSON} 
+              style={{ display: "none" }} 
+            />
+            <div className="icon-box">📥</div>
+            <div className="text-box">
+              <span className="title" style={{ color: "var(--accent-color)" }}>대본 파일 불러오기 (Import)</span>
+              <span className="desc">소장 중인 JSON 파일을 불러와 즉시 교체합니다.</span>
+            </div>
+          </label>
+
+          {/* Export JSON Button */}
+          <button className="duo-sheet-btn" onClick={handleExportJSON}>
+            <div className="icon-box">📤</div>
+            <div className="text-box">
+              <span className="title">현재 대본 내보내기 (Export)</span>
+              <span className="desc">현재 학습 중인 대본 데이터를 JSON 파일로 백업합니다.</span>
+            </div>
+          </button>
+
+          {/* Reset Button */}
+          <button className="duo-sheet-btn" onClick={handleResetDefaultData} style={{ borderColor: "#FF3B30", background: "rgba(255, 59, 48, 0.02)" }}>
+            <div className="icon-box">🔄</div>
+            <div className="text-box">
+              <span className="title" style={{ color: "#FF3B30" }}>기본 대본으로 복원 (Reset)</span>
+              <span className="desc" style={{ color: "#FF453A" }}>기본 내장된 10일치 창작 일상 대본으로 완전히 리셋합니다.</span>
+            </div>
+          </button>
+        </div>
       </div>
     </div>
   );
