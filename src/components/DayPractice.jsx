@@ -501,8 +501,13 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                 key={item.id} 
                 className={`duo-dialogue-card ${transformClass} ${item.speaker}`}
               >
-                <div className={`duo-speaker-badge ${item.speaker}`}>
-                  {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                <div className="hunsang-avatar-profile">
+                  <div className={`hunsang-avatar-circle ${item.speaker}`}>
+                    {item.speaker === "A" ? "HS" : "HB"}
+                  </div>
+                  <span className="hunsang-avatar-name">
+                    {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                  </span>
                 </div>
                 
                 {isActive && isTyping ? (
