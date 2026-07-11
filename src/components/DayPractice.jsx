@@ -3,7 +3,7 @@ import { AudioVisualizer } from "./AudioVisualizer";
 import { Confetti } from "./Confetti";
 import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
 
-export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal }) {
+export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
 
@@ -61,6 +61,15 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       }
     }
   }, [activeTurnIndex]);
+
+  // Trigger day completion callback (streak) when completed in Practice mode
+  useEffect(() => {
+    if (isCompleted && mode !== "test") {
+      if (onDayCompleted) {
+        onDayCompleted(dayData.day);
+      }
+    }
+  }, [isCompleted, mode, dayData.day, onDayCompleted]);
 
   // Clean up recording on unmount
   useEffect(() => {
@@ -304,7 +313,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     const normalizedCorrect = normalizeText(activeSentence.en);
 
     const similarity = getSimilarity(normalizedSpoken, normalizedCorrect);
-    const isCorrect = similarity >= 0.70;
+    const thresholdVal = passingThreshold || 70;
+    const isCorrect = similarity >= (thresholdVal / 100);
 
     if (isCorrect) {
       playSuccessSound();
@@ -324,6 +334,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           
           if (onSaveMedal) {
             onSaveMedal(dayData.day, medalType);
+          }
+          if (onDayCompleted) {
+            onDayCompleted(dayData.day);
           }
           setTestStatus("passed");
         } else {

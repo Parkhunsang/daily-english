@@ -11,8 +11,10 @@ function App() {
   const [practiceMode, setPracticeMode] = useState("speak"); // "preview" or "speak"
   const [showSettings, setShowSettings] = useState(false);
   const [medals, setMedals] = useState({});
+  const [sensitivity, setSensitivity] = useState(70);
+  const [streak, setStreak] = useState(0);
 
-  // Load progress, custom dialogues, and medals from LocalStorage on mount
+  // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
   useEffect(() => {
     try {
       const storedProgress = localStorage.getItem("daily_english_progress");
@@ -26,6 +28,14 @@ function App() {
       const storedMedals = localStorage.getItem("daily_english_medals");
       if (storedMedals) {
         setMedals(JSON.parse(storedMedals));
+      }
+      const storedSensitivity = localStorage.getItem("daily_english_sensitivity");
+      if (storedSensitivity) {
+        setSensitivity(parseInt(storedSensitivity, 10));
+      }
+      const storedStreak = localStorage.getItem("daily_english_streak");
+      if (storedStreak) {
+        setStreak(parseInt(storedStreak, 10));
       }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
@@ -80,6 +90,40 @@ function App() {
       return newMedals;
     });
   };
+
+  const handleSensitivityChange = (val) => {
+    setSensitivity(val);
+    localStorage.setItem("daily_english_sensitivity", val);
+  };
+
+  // Streak counter tracking system
+  const handleDayCompleted = (dayNum) => {
+    const todayStr = new Date().toLocaleDateString("en-CA");
+    const lastCompleteDate = localStorage.getItem("daily_english_last_complete_date");
+    
+    let newStreak = streak;
+
+    if (lastCompleteDate === todayStr) {
+      return; // Already completed today
+    } else if (lastCompleteDate) {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toLocaleDateString("en-CA");
+
+      if (lastCompleteDate === yesterdayStr) {
+        newStreak += 1;
+      } else {
+        newStreak = 1; // Streak broken, reset
+      }
+    } else {
+      newStreak = 1; // First time complete
+    }
+
+    setStreak(newStreak);
+    localStorage.setItem("daily_english_streak", newStreak);
+    localStorage.setItem("daily_english_last_complete_date", todayStr);
+  };
+
   const handleImportJSON = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -101,8 +145,11 @@ function App() {
         
         localStorage.removeItem("daily_english_progress");
         localStorage.removeItem("daily_english_medals");
+        localStorage.removeItem("daily_english_streak");
+        localStorage.removeItem("daily_english_last_complete_date");
         setProgress({});
         setMedals({});
+        setStreak(0);
         
         alert(`총 ${parsed.length}일치의 대본 데이터가 성공적으로 탑재되었습니다!`);
         setShowSettings(false);
@@ -129,13 +176,16 @@ function App() {
   };
 
   const handleResetDefaultData = () => {
-    if (window.confirm("현재 설정된 대본을 모두 지우고, 기본 10일치 일상 대본으로 복원하시겠습니까?\n(진행률 및 시험 메달 기록도 함께 초기화됩니다.)")) {
+    if (window.confirm("현재 설정된 대본을 모두 지우고, 기본 10일치 일상 대본으로 복원하시겠습니까?\n(진행률, 시험 메달 및 스트릭 기록도 함께 초기화됩니다.)")) {
       localStorage.removeItem("daily_english_custom_dialogues");
       localStorage.removeItem("daily_english_progress");
       localStorage.removeItem("daily_english_medals");
+      localStorage.removeItem("daily_english_streak");
+      localStorage.removeItem("daily_english_last_complete_date");
       setDayDataList(DAILY_DATA);
       setProgress({});
       setMedals({});
+      setStreak(0);
       alert("기본 대본으로 복원이 완료되었습니다.");
       setShowSettings(false);
     }
@@ -177,11 +227,33 @@ function App() {
           </>
         ) : (
           <>
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="nav-title" style={{ color: "var(--accent-color)", fontSize: "19px", fontWeight: "850", letterSpacing: "-0.5px" }}>Hunsanglingo 🏆</span>
-              <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-muted)" }}>
-                하루 10분 영어 스피킹
-              </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                <span className="nav-title" style={{ color: "var(--accent-color)", fontSize: "19px", fontWeight: "850", letterSpacing: "-0.5px" }}>Hunsanglingo 🏆</span>
+                <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-muted)" }}>
+                  하루 10분 영어 스피킹
+                </span>
+              </div>
+              {streak > 0 && (
+                <span 
+                  className="header-streak-badge"
+                  title="연속 학습 스트릭!"
+                  style={{
+                    background: "linear-gradient(135deg, #FF5A5F 0%, #FF9500 100%)",
+                    color: "#FFFFFF",
+                    fontSize: "11px",
+                    fontWeight: "800",
+                    padding: "3px 8px",
+                    borderRadius: "12px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "2px",
+                    boxShadow: "0 3px 8px rgba(255, 90, 95, 0.2)"
+                  }}
+                >
+                  🔥 {streak}일
+                </span>
+              )}
             </div>
             
             <button 
@@ -248,6 +320,8 @@ function App() {
                   mode={practiceMode}
                   onSwitchToSpeak={() => setPracticeMode("speak")}
                   onSaveMedal={handleSaveMedal}
+                  passingThreshold={sensitivity}
+                  onDayCompleted={handleDayCompleted}
                 />
               )}
             </div>
@@ -351,6 +425,43 @@ function App() {
         <div className="duo-settings-description" style={{ fontSize: "12px", color: "var(--text-muted)", textAlign: "center", lineHeight: "1.45" }}>
           개인 소장 중인 대본 파일(JSON)을 불러와 공부하거나,<br/>
           공유용 대본 데이터를 백업 및 리셋할 수 있습니다.
+        </div>
+
+        <div className="sensitivity-control-panel" style={{ padding: "16px", background: "#F2F2F7", borderRadius: "20px", margin: "16px 0", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>🎙️ 발음 채점 민감도 (통과 기준)</span>
+            <span style={{ fontSize: "13px", fontWeight: "800", color: "var(--accent-color)" }}>
+              {sensitivity}% {sensitivity === 60 ? "(너그럽게)" : sensitivity === 70 ? "(보통)" : "(엄격하게)"}
+            </span>
+          </div>
+          
+          <div style={{ display: "flex", gap: "8px", width: "100%", marginTop: "10px" }}>
+            {[60, 70, 80].map((level) => (
+              <button
+                key={level}
+                onClick={() => handleSensitivityChange(level)}
+                style={{
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: "12px",
+                  border: "2px solid",
+                  borderColor: sensitivity === level ? "var(--accent-color)" : "#E2E8F0",
+                  background: sensitivity === level ? "rgba(124, 58, 237, 0.05)" : "#FFFFFF",
+                  color: sensitivity === level ? "var(--accent-color)" : "var(--text-secondary)",
+                  fontWeight: "800",
+                  fontSize: "12.5px",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: sensitivity === level ? "none" : "0 2px 6px rgba(0,0,0,0.02)"
+                }}
+              >
+                {level === 60 ? "너그럽게" : level === 70 ? "보통" : "엄격하게"}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "center", fontWeight: "600" }}>
+            {sensitivity === 60 ? "주변에 소음이 있거나 입문자분들께 권장합니다." : sensitivity === 70 ? "훈상링고 권장 기본 통과 감도입니다." : "원어민 수준에 필적하는 정밀한 발음에 도전합니다."}
+          </div>
         </div>
 
         <div className="duo-sheet-actions">
