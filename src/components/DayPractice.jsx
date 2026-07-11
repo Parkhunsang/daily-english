@@ -253,7 +253,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
   // Helper to render color-coded word highlights for speech diagnostics
   const renderWordHighlights = (correctSentence, spokenText) => {
-    if (!spokenText) return <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--error-color)", marginTop: "4px" }}>{correctSentence}</div>;
+    if (!spokenText) return <div style={{ fontSize: "14.5px", fontWeight: "500", color: "var(--text-muted)", opacity: 0.4, marginTop: "4px" }}>{correctSentence}</div>;
     
     const cleanSpokenWords = spokenText
       .toLowerCase()
@@ -277,14 +277,15 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
               key={idx} 
               className={`word-hl-item ${isMatched ? "correct" : "incorrect"}`}
               style={{
-                fontSize: "14px",
-                fontWeight: "750",
-                color: isMatched ? "var(--success-color)" : "var(--error-color)",
-                textDecoration: isMatched ? "none" : "line-through",
-                padding: "2px 6px",
-                borderRadius: "6px",
-                background: isMatched ? "rgba(0, 200, 151, 0.05)" : "rgba(255, 59, 48, 0.05)",
-                display: "inline-block"
+                fontSize: "14.5px",
+                fontWeight: isMatched ? "800" : "500",
+                color: isMatched ? "var(--accent-color)" : "var(--text-muted)",
+                textDecoration: isMatched ? "underline" : "none",
+                textDecorationColor: isMatched ? "rgba(124, 58, 237, 0.4)" : "transparent",
+                opacity: isMatched ? 1 : 0.35,
+                padding: "2px 4px",
+                display: "inline-block",
+                transition: "all 0.2s"
               }}
             >
               {word}
