@@ -1,24 +1,24 @@
 :root {
-  --background-color: #F2F2F7;
+  --background-color: #F8F9FC;
   --card-background: #FFFFFF;
-  --text-primary: #1C1C1E;
-  --text-secondary: #3A3A3C;
-  --text-muted: #8E8E93;
-  --accent-color: #007AFF;
-  --accent-light: rgba(0, 122, 255, 0.08);
-  --success-color: #34C759;
-  --success-light: rgba(52, 199, 89, 0.1);
-  --error-color: #FF3B30;
+  --text-primary: #1A1A1E;
+  --text-secondary: #4A4A4C;
+  --text-muted: #9A9A9F;
+  --accent-color: #7C3AED;      /* Hunsanglingo Violet */
+  --accent-light: rgba(124, 58, 237, 0.08);
+  --success-color: #00C897;     /* Hunsanglingo Emerald */
+  --success-light: rgba(0, 200, 151, 0.1);
+  --error-color: #FF3B30;       /* Rose Red */
   --error-light: rgba(255, 59, 48, 0.1);
-  --border-color: rgba(0, 0, 0, 0.08);
+  --border-color: rgba(0, 0, 0, 0.06);
   --safe-top: env(safe-area-inset-top, 20px);
   --safe-bottom: env(safe-area-inset-bottom, 20px);
   
   /* Chat Colors */
-  --bubble-a-bg: #E1F0FF;
-  --bubble-a-text: #004C99;
-  --bubble-b-bg: #F0EEFF;
-  --bubble-b-text: #3B3095;
+  --bubble-a-bg: rgba(124, 58, 237, 0.08);
+  --bubble-a-text: #7C3AED;
+  --bubble-b-bg: rgba(255, 90, 95, 0.08);
+  --bubble-b-text: #FF5A5F;     /* Hunsanglingo Coral */
 }
 
 * {

@@ -144,7 +144,7 @@ function App() {
         ) : (
           <>
             <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span className="nav-title">Daily English</span>
+              <span className="nav-title" style={{ color: "var(--accent-color)", fontSize: "19px", fontWeight: "850", letterSpacing: "-0.5px" }}>Hunsanglingo 🏆</span>
               <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-muted)" }}>
                 하루 10분 영어 스피킹
               </span>
