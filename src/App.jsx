@@ -10,8 +10,9 @@ function App() {
   const [selectedDayForSheet, setSelectedDayForSheet] = useState(null);
   const [practiceMode, setPracticeMode] = useState("speak"); // "preview" or "speak"
   const [showSettings, setShowSettings] = useState(false);
+  const [medals, setMedals] = useState({});
 
-  // Load progress and custom dialogues from LocalStorage on mount
+  // Load progress, custom dialogues, and medals from LocalStorage on mount
   useEffect(() => {
     try {
       const storedProgress = localStorage.getItem("daily_english_progress");
@@ -21,6 +22,10 @@ function App() {
       const storedCustomData = localStorage.getItem("daily_english_custom_dialogues");
       if (storedCustomData) {
         setDayDataList(JSON.parse(storedCustomData));
+      }
+      const storedMedals = localStorage.getItem("daily_english_medals");
+      if (storedMedals) {
+        setMedals(JSON.parse(storedMedals));
       }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
@@ -50,6 +55,31 @@ function App() {
       return newProgress;
     });
   };
+
+  // Save earned test medals (Gold > Silver > Bronze priority)
+  const handleSaveMedal = (dayNum, medalType) => {
+    setMedals((prevMedals) => {
+      const existingMedal = prevMedals[dayNum];
+      const medalWeight = { gold: 3, silver: 2, bronze: 1 };
+      
+      if (existingMedal && medalWeight[existingMedal] >= medalWeight[medalType]) {
+        return prevMedals; // Keep the higher medal
+      }
+
+      const newMedals = {
+        ...prevMedals,
+        [dayNum]: medalType,
+      };
+
+      try {
+        localStorage.setItem("daily_english_medals", JSON.stringify(newMedals));
+      } catch (e) {
+        console.error("Failed to save medals to localStorage", e);
+      }
+
+      return newMedals;
+    });
+  };
   const handleImportJSON = (event) => {
     const file = event.target.files[0];
     if (!file) return;
@@ -70,7 +100,9 @@ function App() {
         setDayDataList(parsed);
         
         localStorage.removeItem("daily_english_progress");
+        localStorage.removeItem("daily_english_medals");
         setProgress({});
+        setMedals({});
         
         alert(`총 ${parsed.length}일치의 대본 데이터가 성공적으로 탑재되었습니다!`);
         setShowSettings(false);
@@ -97,11 +129,13 @@ function App() {
   };
 
   const handleResetDefaultData = () => {
-    if (window.confirm("현재 설정된 대본을 모두 지우고, 기본 10일치 일상 대본으로 복원하시겠습니까?\n(진행률 등 모든 기록도 초기화됩니다.)")) {
+    if (window.confirm("현재 설정된 대본을 모두 지우고, 기본 10일치 일상 대본으로 복원하시겠습니까?\n(진행률 및 시험 메달 기록도 함께 초기화됩니다.)")) {
       localStorage.removeItem("daily_english_custom_dialogues");
       localStorage.removeItem("daily_english_progress");
+      localStorage.removeItem("daily_english_medals");
       setDayDataList(DAILY_DATA);
       setProgress({});
+      setMedals({});
       alert("기본 대본으로 복원이 완료되었습니다.");
       setShowSettings(false);
     }
@@ -196,6 +230,7 @@ function App() {
                 data={dayDataList}
                 onSelectDay={setSelectedDayForSheet}
                 progress={progress}
+                medals={medals}
               />
             </div>
 
@@ -212,6 +247,7 @@ function App() {
                   onBack={() => setActiveDay(null)}
                   mode={practiceMode}
                   onSwitchToSpeak={() => setPracticeMode("speak")}
+                  onSaveMedal={handleSaveMedal}
                 />
               )}
             </div>

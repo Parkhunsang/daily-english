@@ -3,7 +3,7 @@ import { AudioVisualizer } from "./AudioVisualizer";
 import { Confetti } from "./Confetti";
 import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
 
-export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak }) {
+export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
 
@@ -251,6 +251,50 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     return (maxLength - distance) / maxLength;
   };
 
+  // Helper to render color-coded word highlights for speech diagnostics
+  const renderWordHighlights = (correctSentence, spokenText) => {
+    if (!spokenText) return <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--error-color)", marginTop: "4px" }}>{correctSentence}</div>;
+    
+    const cleanSpokenWords = spokenText
+      .toLowerCase()
+      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "")
+      .trim()
+      .split(/\s+/);
+      
+    const correctWords = correctSentence.split(/\s+/);
+    
+    return (
+      <div className="word-highlights-container" style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "6px 4px", marginTop: "8px" }}>
+        {correctWords.map((word, idx) => {
+          const cleanWord = word
+            .toLowerCase()
+            .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, "");
+            
+          const isMatched = cleanSpokenWords.includes(cleanWord);
+          
+          return (
+            <span 
+              key={idx} 
+              className={`word-hl-item ${isMatched ? "correct" : "incorrect"}`}
+              style={{
+                fontSize: "14px",
+                fontWeight: "750",
+                color: isMatched ? "var(--success-color)" : "var(--error-color)",
+                textDecoration: isMatched ? "none" : "line-through",
+                padding: "2px 6px",
+                borderRadius: "6px",
+                background: isMatched ? "rgba(0, 200, 151, 0.05)" : "rgba(255, 59, 48, 0.05)",
+                display: "inline-block"
+              }}
+            >
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
+  };
+
   const processSpeechResult = (spokenText) => {
     const activeSentence = dialogue[activeTurnIndex];
     if (!activeSentence) return;
@@ -273,6 +317,13 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       
       setTimeout(() => {
         if (mode === "test" && activeTurnIndex === dialogue.length - 1) {
+          let medalType = "bronze";
+          if (hearts === 3) medalType = "gold";
+          else if (hearts === 2) medalType = "silver";
+          
+          if (onSaveMedal) {
+            onSaveMedal(dayData.day, medalType);
+          }
           setTestStatus("passed");
         } else {
           setActiveTurnIndex(prev => prev + 1);
@@ -684,7 +735,12 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                     ) : (
                       <div className="panel-feedback error">
                         <strong>인식 결과: "{result.transcript || "(아무 소리도 인식 안 됨)"}"</strong>
-                        {mode !== "test" && <>정답 문장: {activeSentence?.en.replace(/\*/g, "")}</>}
+                        {mode !== "test" ? (
+                          <>
+                            <div style={{ fontSize: "12px", color: "var(--text-muted)", fontWeight: "750", marginTop: "8px", borderTop: "1px solid rgba(0,0,0,0.05)", paddingTop: "8px" }}>발음 매칭 분석:</div>
+                            {renderWordHighlights(activeSentence?.en.replace(/\*/g, ""), result.transcript)}
+                          </>
+                        ) : null}
                       </div>
                     )}
                   </div>

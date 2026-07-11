@@ -1,6 +1,6 @@
 import React from "react";
 
-export function DayList({ data, onSelectDay, progress }) {
+export function DayList({ data, onSelectDay, progress, medals = {} }) {
   // Calculate total sentences and total completed
   let totalSentences = 0;
   let totalCompleted = 0;
@@ -47,7 +47,18 @@ export function DayList({ data, onSelectDay, progress }) {
               onClick={() => onSelectDay(dayData.day)}
             >
               <div className="day-header">
-                <span className="day-number">Day {String(dayData.day).padStart(3, "0")}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span className="day-number">Day {String(dayData.day).padStart(3, "0")}</span>
+                  {medals[dayData.day] && (
+                    <span 
+                      className="day-medal-badge" 
+                      title={medals[dayData.day] === "gold" ? "금메달 합격" : medals[dayData.day] === "silver" ? "은메달 합격" : "동메달 합격"}
+                      style={{ fontSize: "14px", display: "inline-block", transformOrigin: "bottom center" }}
+                    >
+                      {medals[dayData.day] === "gold" ? "🥇" : medals[dayData.day] === "silver" ? "🥈" : "🥉"}
+                    </span>
+                  )}
+                </div>
                 <span className={`day-progress-badge ${percent === 100 ? "completed" : ""}`}>
                   {percent === 100 ? "완료" : `${percent}%`}
                 </span>

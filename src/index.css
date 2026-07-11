@@ -1256,3 +1256,14 @@ body {
   letter-spacing: -0.2px;
 }
 
+/* Floating animation for medals */
+.day-medal-badge {
+  animation: duoMedalFloat 2s infinite ease-in-out;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
+}
+
+@keyframes duoMedalFloat {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-3px) scale(1.1); }
+}
+
