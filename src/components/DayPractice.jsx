@@ -33,6 +33,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
 
+  const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
+  const isCompleted = activeTurnIndex === dialogue.length;
+
   // Update active turn index if dayData changes or mode changes
   useEffect(() => {
     if (mode === "test") {
@@ -378,8 +381,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setIsTyping(false);
   };
 
-  const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
-  const isCompleted = activeTurnIndex === dialogue.length;
+
 
   if (mode === "test" && testStatus !== "playing") {
     const isPassed = testStatus === "passed";
