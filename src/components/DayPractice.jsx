@@ -329,8 +329,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     }
 
     return (
-      <div className="practice-layout">
-        <div className="duo-report-container" style={{ padding: "30px 20px" }}>
+      <div className="practice-layout" style={{ overflowY: "auto" }}>
+        <div className="duo-report-container" style={{ padding: "30px 20px calc(var(--safe-bottom) + 50px)", display: "flex", flexDirection: "column", alignItems: "center", width: "100%", boxSizing: "border-box" }}>
           {isPassed ? (
             <>
               <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
@@ -343,7 +343,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                 {medalText}
               </p>
               
-              <div className="duo-report-stats" style={{ display: "flex", gap: "12px", justifyContent: "center", margin: "24px 0" }}>
+              <div className="duo-report-stats" style={{ display: "flex", gap: "12px", justifyContent: "center", margin: "24px 0", width: "100%", maxWidth: "340px" }}>
                 <div className="duo-stat-card" style={{ flex: 1, padding: "16px", borderRadius: "18px", border: "2px solid var(--border-color)", textAlign: "center", background: "#FFFFFF" }}>
                   <div className="duo-stat-label" style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "700" }}>최종 점수</div>
                   <div className="duo-stat-val" style={{ fontSize: "26px", fontWeight: "850", color: "var(--success-color)", marginTop: "4px" }}>{score}점</div>
@@ -368,7 +368,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             </>
           )}
 
-          <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px" }}>
+          <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px", width: "100%", maxWidth: "340px", boxSizing: "border-box" }}>
             <h3 style={{ fontSize: "14px", fontWeight: "750", marginBottom: "12px" }}>오늘의 대화 복습</h3>
             <div className="duo-review-list" style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
               {dialogue.map((item) => (
@@ -383,7 +383,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             </div>
           </div>
 
-          <div className="duo-report-actions" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px" }}>
+          <div className="duo-report-actions" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px", width: "100%", maxWidth: "340px" }}>
             <button 
               className="duo-btn-primary" 
               onClick={() => {
