@@ -331,72 +331,74 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     return (
       <div className="practice-layout" style={{ overflowY: "auto" }}>
         <div className="duo-report-container" style={{ padding: "30px 20px calc(var(--safe-bottom) + 50px)", display: "flex", flexDirection: "column", alignItems: "center", width: "100%", boxSizing: "border-box" }}>
-          {isPassed ? (
-            <>
-              <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
-                {medal}
-              </div>
-              <h2 className="duo-report-title" style={{ color: "var(--success-color)", fontSize: "24px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
-                스피킹 시험 합격!
-              </h2>
-              <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
-                {medalText}
-              </p>
-              
-              <div className="duo-report-stats" style={{ display: "flex", gap: "12px", justifyContent: "center", margin: "24px 0", width: "100%", maxWidth: "340px" }}>
-                <div className="duo-stat-card" style={{ flex: 1, padding: "16px", borderRadius: "18px", border: "2px solid var(--border-color)", textAlign: "center", background: "#FFFFFF" }}>
-                  <div className="duo-stat-label" style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "700" }}>최종 점수</div>
-                  <div className="duo-stat-val" style={{ fontSize: "26px", fontWeight: "850", color: "var(--success-color)", marginTop: "4px" }}>{score}점</div>
+          <div className="duo-report-card">
+            {isPassed ? (
+              <>
+                <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
+                  {medal}
                 </div>
-                <div className="duo-stat-card" style={{ flex: 1, padding: "16px", borderRadius: "18px", border: "2px solid var(--border-color)", textAlign: "center", background: "#FFFFFF" }}>
-                  <div className="duo-stat-label" style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "700" }}>남은 하트</div>
-                  <div className="duo-stat-val" style={{ fontSize: "26px", fontWeight: "850", color: "#FF9500", marginTop: "4px" }}>{hearts} / 3</div>
+                <h2 className="duo-report-title" style={{ color: "var(--success-color)", fontSize: "22px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
+                  스피킹 시험 합격!
+                </h2>
+                <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
+                  {medalText}
+                </p>
+                
+                <div className="duo-report-stats" style={{ display: "flex", gap: "12px", justifyContent: "center", margin: "20px 0", width: "100%" }}>
+                  <div className="duo-stat-card" style={{ flex: 1, padding: "14px 10px", borderRadius: "18px", border: "2px solid #E2E8F0", borderBottom: "5px solid #CBD5E1", textAlign: "center", background: "#FFFFFF" }}>
+                    <div className="duo-stat-label" style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "750" }}>최종 점수</div>
+                    <div className="duo-stat-val" style={{ fontSize: "22px", fontWeight: "850", color: "var(--success-color)", marginTop: "4px" }}>{score}점</div>
+                  </div>
+                  <div className="duo-stat-card" style={{ flex: 1, padding: "14px 10px", borderRadius: "18px", border: "2px solid #E2E8F0", borderBottom: "5px solid #CBD5E1", textAlign: "center", background: "#FFFFFF" }}>
+                    <div className="duo-stat-label" style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "750" }}>남은 하트</div>
+                    <div className="duo-stat-val" style={{ fontSize: "22px", fontWeight: "850", color: "#FF9500", marginTop: "4px" }}>{hearts} / 3</div>
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            <>
-              <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
-                😢
-              </div>
-              <h2 className="duo-report-title" style={{ color: "#FF3B30", fontSize: "24px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
-                아쉽게도 탈락했습니다...
-              </h2>
-              <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
-                하트 3개를 모두 잃었습니다. 조금만 더 연습해 볼까요?
-              </p>
-            </>
-          )}
+              </>
+            ) : (
+              <>
+                <div className="duo-report-medal" style={{ fontSize: "70px", textAlign: "center" }}>
+                  😢
+                </div>
+                <h2 className="duo-report-title" style={{ color: "#FF3B30", fontSize: "22px", fontWeight: "850", textAlign: "center", marginTop: "10px" }}>
+                  아쉽게도 탈락했습니다...
+                </h2>
+                <p style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px" }}>
+                  하트 3개를 모두 잃었습니다. 조금만 더 연습해 볼까요?
+                </p>
+              </>
+            )}
 
-          <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px", width: "100%", maxWidth: "340px", boxSizing: "border-box" }}>
-            <h3 style={{ fontSize: "14px", fontWeight: "750", marginBottom: "12px" }}>오늘의 대화 복습</h3>
-            <div className="duo-review-list" style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
-              {dialogue.map((item) => (
-                <div key={item.id} className="duo-review-item" style={{ background: "#FFFFFF", padding: "10px 12px", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.04)" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-muted)", display: "block", marginBottom: "2px" }}>
-                    {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
-                  </span>
-                  <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-secondary)" }}>{item.ko}</div>
-                  <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--accent-color)", marginTop: "2px" }}>{item.en.replace(/\*/g, "")}</div>
-                </div>
-              ))}
+            <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px", width: "100%", boxSizing: "border-box" }}>
+              <h3 style={{ fontSize: "14px", fontWeight: "750", marginBottom: "12px", textAlign: "left", width: "100%" }}>오늘의 대화 복습</h3>
+              <div className="duo-review-list" style={{ maxHeight: "200px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", width: "100%" }}>
+                {dialogue.map((item) => (
+                  <div key={item.id} className="duo-review-item" style={{ background: "#FFFFFF", padding: "10px 12px", borderRadius: "12px", border: "1px solid rgba(0,0,0,0.04)", width: "100%", boxSizing: "border-box", display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
+                    <span style={{ fontSize: "10px", fontWeight: "750", color: "var(--text-muted)" }}>
+                      {item.speaker === "A" ? "Hun Sang" : "Han Bi"}
+                    </span>
+                    <div style={{ fontSize: "13px", fontWeight: "600", color: "var(--text-secondary)", textAlign: "left" }}>{item.ko}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: "700", color: "var(--accent-color)", marginTop: "2px", textAlign: "left" }}>{item.en.replace(/\*/g, "")}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
 
-          <div className="duo-report-actions" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px", width: "100%", maxWidth: "340px" }}>
-            <button 
-              className="duo-btn-primary" 
-              onClick={() => {
-                setHearts(3);
-                setActiveTurnIndex(0);
-                setTestStatus("playing");
-              }}
-            >
-              {isPassed ? "다시 도전하기 🏆" : "재시험 치기 🔄"}
-            </button>
-            <button className="duo-btn-secondary" onClick={onBack}>
-              대시보드로 돌아가기
-            </button>
+            <div className="duo-report-actions" style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px", width: "100%" }}>
+              <button 
+                className="duo-btn-primary" 
+                onClick={() => {
+                  setHearts(3);
+                  setActiveTurnIndex(0);
+                  setTestStatus("playing");
+                }}
+              >
+                {isPassed ? "다시 도전하기 🏆" : "재시험 치기 🔄"}
+              </button>
+              <button className="duo-btn-secondary" onClick={onBack}>
+                대시보드로 돌아가기
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -562,7 +564,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         /* ---------------------------------------------------- */
         /* Duolingo-Style Completion View                       */
         /* ---------------------------------------------------- */
-        <div className="duo-completion-view">
+      <div className="duo-completion-view">
+        <div className="duo-report-card">
           <div className="duo-radial-progress-wrapper">
             <div className="duo-radial-progress">
               <svg className="duo-radial-svg" viewBox="0 0 100 100">
@@ -577,42 +580,43 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             </div>
           </div>
 
-          <h2 className="duo-completion-title">오늘의 대화 완료!</h2>
-          <p className="duo-completion-subtitle">
+          <h2 className="duo-completion-title" style={{ fontSize: "22px", fontWeight: "850", marginTop: "10px" }}>오늘의 대화 완료!</h2>
+          <p className="duo-completion-subtitle" style={{ color: "var(--text-secondary)", fontSize: "14px", marginTop: "4px", marginBottom: "20px" }}>
             Day {dayData.day}의 모든 훈련을 성공적으로 마쳤습니다.
           </p>
 
           {/* Stats Box */}
-          <div className="duo-stats-row">
-            <div className="duo-stat-card">
-              <div className="duo-stat-val">6 / 6</div>
-              <div className="duo-stat-lbl">연습 문장</div>
+          <div className="duo-report-stats" style={{ display: "flex", gap: "12px", width: "100%", margin: "16px 0" }}>
+            <div className="duo-report-stat-item" style={{ flex: 1, background: "#FFFFFF", border: "2px solid #E2E8F0", borderBottom: "5px solid #CBD5E1", borderRadius: "18px", padding: "14px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "750" }}>연습 문장</div>
+              <div style={{ fontSize: "22px", fontWeight: "850", color: "var(--accent-color)", marginTop: "4px" }}>6 / 6</div>
             </div>
-            <div className="duo-stat-card">
-              <div className="duo-stat-val">100%</div>
-              <div className="duo-stat-lbl">학습 성공률</div>
+            <div className="duo-report-stat-item" style={{ flex: 1, background: "#FFFFFF", border: "2px solid #E2E8F0", borderBottom: "5px solid #CBD5E1", borderRadius: "18px", padding: "14px 10px", textAlign: "center" }}>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "750" }}>학습 성공률</div>
+              <div style={{ fontSize: "22px", fontWeight: "850", color: "var(--success-color)", marginTop: "4px" }}>100%</div>
             </div>
           </div>
 
           {/* Vocabulary Review Section */}
-          <div className="duo-review-card">
-            <h3 className="duo-review-title">
+          <div className="duo-review-card" style={{ background: "#F2F2F7", borderRadius: "20px", padding: "16px", marginTop: "12px", width: "100%", boxSizing: "border-box" }}>
+            <h3 style={{ fontSize: "14px", fontWeight: "750", marginBottom: "12px", textAlign: "left", width: "100%", display: "flex", alignItems: "center", gap: "8px" }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M12 3L1 9L12 15L21 10.09V17H23V9L12 3ZM12 5.18L18.97 9L12 12.82L5.03 9L12 5.18ZM12 17.3L5 13.7V17L12 20.3L19 17V13.7L12 17.3Z" fill="currentColor"/>
               </svg>
               핵심 표현 오디오 복습
             </h3>
-            <div className="duo-review-list">
+            <div className="duo-review-list" style={{ width: "100%" }}>
               {dayData.vocabulary.map((vocab, index) => (
-                <div key={index} className="duo-review-item">
-                  <div className="duo-vocab-info">
-                    <span className="duo-vocab-phrase">{vocab.phrase}</span>
-                    <span className="duo-vocab-meaning">{vocab.meaning}</span>
+                <div key={index} className="duo-review-item" style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: "8px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+                  <div className="duo-vocab-info" style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
+                    <span className="duo-vocab-phrase" style={{ fontSize: "14px", fontWeight: "700", color: "var(--accent-color)" }}>{vocab.phrase}</span>
+                    <span className="duo-vocab-meaning" style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{vocab.meaning}</span>
                   </div>
                   <button 
                     className="duo-vocab-listen-btn" 
                     onClick={(e) => handleSpeakTTS(vocab.phrase, e)}
                     title="원어민 발음 듣기"
+                    style={{ width: "32px", height: "32px", borderRadius: "50%", background: "var(--accent-light)", color: "var(--accent-color)", border: "none", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                       <path d="M3 9V15H7L12 20V4L7 9H3ZM16.5 12C16.5 10.23 15.48 8.71 14 8V16C15.48 15.29 16.5 13.77 16.5 12ZM14 3.23V5.29C16.89 6.15 19 8.83 19 12C19 15.17 16.89 17.85 14 18.71V20.77C18.01 19.86 21 16.28 21 12C21 7.72 18.01 4.14 14 3.23Z" fill="currentColor"/>
@@ -624,7 +628,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           </div>
 
           {/* Action Footer Buttons */}
-          <div className="duo-actions">
+          <div className="duo-actions" style={{ width: "100%", display: "flex", flexDirection: "column", gap: "10px", marginTop: "20px" }}>
             <button className="duo-btn-primary" onClick={onBack}>
               계속하기
             </button>
@@ -633,6 +637,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             </button>
           </div>
         </div>
+      </div>
       )}
 
       {/* Fixed Bottom Control Bar (Hidden when complete) */}
