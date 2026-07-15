@@ -19,7 +19,7 @@ async function callSupabaseEdgeFunction(sentenceEn, sentenceKo, supabaseUrl, sup
     return data;
   } catch (err) {
     console.error("Supabase Edge Function invocation failed:", err);
-    throw new Error(`Supabase AI 호출 실패: ${err.message}`);
+    throw new Error(`Supabase AI 호출 실패: Edge Function('explain-sentence')이 새 Supabase 프로젝트에 배포되지 않았습니다. 설정⚙️에서 개인 Gemini API Key를 등록하여 직접 연동하여 이용해 주세요.`);
   }
 }
 

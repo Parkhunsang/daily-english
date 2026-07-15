@@ -554,48 +554,38 @@ function App() {
             </span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", borderTop: "1px solid #E5E5EA", paddingTop: "12px" }}>
-            {!(supabaseUrl && supabaseKey) && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)" }}>Gemini API Key (개인 입력용)</span>
-                  <a 
-                    href="https://aistudio.google.com/" 
-                    target="_blank" 
-                    rel="noopener noreferrer" 
-                    style={{ fontSize: "10.5px", fontWeight: "800", color: "var(--accent-color)", textDecoration: "none" }}
-                  >
-                    무료 API 키 발급받기 ↗
-                  </a>
-                </div>
-                <input 
-                  type="password" 
-                  value={geminiApiKey} 
-                  onChange={(e) => handleGeminiApiKeyChange(e.target.value)} 
-                  placeholder="AI_KEY_..." 
-                  style={{
-                    padding: "8px 12px",
-                    borderRadius: "10px",
-                    border: "1.5px solid #E2E8F0",
-                    fontSize: "12px",
-                    outline: "none",
-                    fontFamily: "monospace",
-                    background: "#FFFFFF",
-                    boxSizing: "border-box",
-                    width: "100%"
-                  }}
-                />
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)" }}>Gemini API Key (개인 입력용)</span>
+                <a 
+                  href="https://aistudio.google.com/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  style={{ fontSize: "10.5px", fontWeight: "800", color: "var(--accent-color)", textDecoration: "none" }}
+                >
+                  무료 API 키 발급받기 ↗
+                </a>
               </div>
-            )}
+              <input 
+                type="text" 
+                value={geminiApiKey} 
+                onChange={(e) => handleGeminiApiKeyChange(e.target.value)} 
+                placeholder="AI_KEY_..." 
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "10px",
+                  border: "1.5px solid #E2E8F0",
+                  fontSize: "12px",
+                  outline: "none",
+                  fontFamily: "monospace",
+                  background: "#FFFFFF",
+                  boxSizing: "border-box",
+                  width: "100%"
+                }}
+              />
+            </div>
             <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.45", textAlign: "left", fontWeight: "600" }}>
-              {(supabaseUrl && supabaseKey) ? (
-                <>
-                  * <strong>Supabase 연동이 감지되어 보안 프록시로 동작 중입니다.</strong> 사용자는 어떠한 설정이나 API 키 발급도 필요하지 않으며, 보안이 강화된 상태로 AI 분석이 작동합니다.
-                </>
-              ) : (
-                <>
-                  * 아래 Supabase 연동이 되어있으면 자동으로 안전한 프록시를 이용해 일반 사용자에게 무료 AI 기능을 제공합니다. 연동이 없을 경우, 이 브라우저에서 개인 Gemini API Key를 등록하여 이용할 수 있습니다.
-                </>
-              )}
+              * Supabase 프로젝트에 보안 프록시 함수(explain-sentence)가 배포되지 않은 경우, 위 입력칸에 개인 Gemini API Key를 등록하여 직접 연동하여 사용해 주세요.
             </div>
           </div>
         </div>
