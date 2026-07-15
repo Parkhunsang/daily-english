@@ -17,6 +17,7 @@ function App() {
   const [supabaseUrl, setSupabaseUrl] = useState("");
   const [supabaseKey, setSupabaseKey] = useState("");
   const [syncEnabled, setSyncEnabled] = useState(false);
+  const [practiceStartTime, setPracticeStartTime] = useState(null);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
   useEffect(() => {
@@ -137,7 +138,9 @@ function App() {
     // Trigger Scheduler Sync if enabled
     if (syncEnabled) {
       const title = dayTitle || dayDataList.find(d => d.day === dayNum)?.title || "영어 회화";
-      syncEventToScheduler(dayNum, title, supabaseUrl, supabaseKey).then(res => {
+      const start = practiceStartTime || new Date(Date.now() - 20 * 60 * 1000); // 20m fallback
+      const end = new Date();
+      syncEventToScheduler(dayNum, title, supabaseUrl, supabaseKey, start, end).then(res => {
         if (res.success) {
           console.log("스케줄러 연동 성공!");
         } else {
@@ -402,6 +405,7 @@ function App() {
                   setPracticeMode("preview");
                   setActiveDay(selectedDayForSheet);
                   setSelectedDayForSheet(null);
+                  setPracticeStartTime(new Date());
                 }}
               >
                 <div className="icon-box">📖</div>
@@ -417,6 +421,7 @@ function App() {
                   setPracticeMode("speak");
                   setActiveDay(selectedDayForSheet);
                   setSelectedDayForSheet(null);
+                  setPracticeStartTime(new Date());
                 }}
               >
                 <div className="icon-box">🎙️</div>
@@ -432,6 +437,7 @@ function App() {
                   setPracticeMode("test");
                   setActiveDay(selectedDayForSheet);
                   setSelectedDayForSheet(null);
+                  setPracticeStartTime(new Date());
                 }}
                 style={{
                   borderColor: "#FF9500",
