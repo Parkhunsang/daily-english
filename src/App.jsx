@@ -548,7 +548,7 @@ function App() {
               <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
                 <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)", textAlign: "left" }}>Supabase Anon Key</span>
                 <input 
-                  type="password" 
+                  type="text" 
                   value={supabaseKey} 
                   onChange={(e) => handleSupabaseKeyChange(e.target.value)} 
                   placeholder="Publishable Key (anon)" 

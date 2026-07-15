@@ -954,6 +954,9 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-sizing: border-box;
 }
 
 .duo-bottom-sheet.open {
