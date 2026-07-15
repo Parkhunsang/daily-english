@@ -31,7 +31,7 @@ Korean translation: "${cleanSentenceKo}"
 Break down why the sentence is constructed this way, explain key grammar points, define vocabulary words/idioms, and provide natural alternative expressions. Provide all explanation descriptions in friendly and clear Korean.`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
       {
         method: 'POST',
         headers: {
