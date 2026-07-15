@@ -38,7 +38,8 @@ export async function syncEventToScheduler(dayNum, dayTitle, supabaseUrl, supaba
   };
 
   try {
-    const supabase = createClient(supabaseUrl, supabaseKey);
+    const cleanedUrl = supabaseUrl.replace(/\/rest\/v1\/?$/, '').replace(/\/$/, '').trim();
+    const supabase = createClient(cleanedUrl, supabaseKey);
     const { data, error } = await supabase
       .from('scheduler_events')
       .insert([payload])
