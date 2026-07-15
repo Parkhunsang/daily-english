@@ -17,6 +17,7 @@ function App() {
   const [supabaseUrl, setSupabaseUrl] = useState("");
   const [supabaseKey, setSupabaseKey] = useState("");
   const [syncEnabled, setSyncEnabled] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [practiceStartTime, setPracticeStartTime] = useState(null);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
@@ -54,6 +55,10 @@ function App() {
       if (storedSync) {
         setSyncEnabled(storedSync === "true");
       }
+      const storedGeminiKey = localStorage.getItem("daily_english_gemini_api_key");
+      if (storedGeminiKey) {
+        setGeminiApiKey(storedGeminiKey);
+      }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
     }
@@ -72,6 +77,11 @@ function App() {
   const handleSyncEnabledChange = (val) => {
     setSyncEnabled(val);
     localStorage.setItem("daily_english_supabase_sync_enabled", String(val));
+  };
+
+  const handleGeminiApiKeyChange = (val) => {
+    setGeminiApiKey(val);
+    localStorage.setItem("daily_english_gemini_api_key", val);
   };
 
   // Save progress to LocalStorage when it changes
@@ -368,6 +378,9 @@ function App() {
                   onSaveMedal={handleSaveMedal}
                   passingThreshold={sensitivity}
                   onDayCompleted={handleDayCompleted}
+                  geminiApiKey={geminiApiKey}
+                  supabaseUrl={supabaseUrl}
+                  supabaseKey={supabaseKey}
                 />
               )}
             </div>
@@ -510,6 +523,80 @@ function App() {
           </div>
           <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "center", fontWeight: "600" }}>
             {sensitivity === 60 ? "주변에 소음이 있거나 입문자분들께 권장합니다." : sensitivity === 70 ? "훈상링고 권장 기본 통과 감도입니다." : "원어민 수준에 필적하는 정밀한 발음에 도전합니다."}
+          </div>
+        </div>
+
+        {/* Gemini AI Integration Panel */}
+        <div className="sensitivity-control-panel" style={{ padding: "16px", background: "#F2F2F7", borderRadius: "20px", margin: "16px 0", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>✨ Gemini AI 실시간 해설 연동</span>
+            <span style={{
+              fontSize: "10.5px",
+              fontWeight: "800",
+              color: (supabaseUrl && supabaseKey) 
+                ? "var(--success-color)" 
+                : geminiApiKey 
+                  ? "var(--success-color)" 
+                  : "var(--error-color)",
+              background: (supabaseUrl && supabaseKey) 
+                ? "rgba(0, 200, 151, 0.08)" 
+                : geminiApiKey 
+                  ? "rgba(0, 200, 151, 0.08)" 
+                  : "rgba(255, 59, 48, 0.08)",
+              padding: "2px 8px",
+              borderRadius: "10px"
+            }}>
+              {(supabaseUrl && supabaseKey) 
+                ? "🟢 Supabase 보안 프록시" 
+                : geminiApiKey 
+                  ? "🟢 개인 API Key" 
+                  : "🔴 비활성화됨"}
+            </span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", borderTop: "1px solid #E5E5EA", paddingTop: "12px" }}>
+            {!(supabaseUrl && supabaseKey) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)" }}>Gemini API Key (개인 입력용)</span>
+                  <a 
+                    href="https://aistudio.google.com/" 
+                    target="_blank" 
+                    rel="noopener noreferrer" 
+                    style={{ fontSize: "10.5px", fontWeight: "800", color: "var(--accent-color)", textDecoration: "none" }}
+                  >
+                    무료 API 키 발급받기 ↗
+                  </a>
+                </div>
+                <input 
+                  type="password" 
+                  value={geminiApiKey} 
+                  onChange={(e) => handleGeminiApiKeyChange(e.target.value)} 
+                  placeholder="AI_KEY_..." 
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1.5px solid #E2E8F0",
+                    fontSize: "12px",
+                    outline: "none",
+                    fontFamily: "monospace",
+                    background: "#FFFFFF",
+                    boxSizing: "border-box",
+                    width: "100%"
+                  }}
+                />
+              </div>
+            )}
+            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.45", textAlign: "left", fontWeight: "600" }}>
+              {(supabaseUrl && supabaseKey) ? (
+                <>
+                  * <strong>Supabase 연동이 감지되어 보안 프록시로 동작 중입니다.</strong> 사용자는 어떠한 설정이나 API 키 발급도 필요하지 않으며, 보안이 강화된 상태로 AI 분석이 작동합니다.
+                </>
+              ) : (
+                <>
+                  * 아래 Supabase 연동이 되어있으면 자동으로 안전한 프록시를 이용해 일반 사용자에게 무료 AI 기능을 제공합니다. 연동이 없을 경우, 이 브라우저에서 개인 Gemini API Key를 등록하여 이용할 수 있습니다.
+                </>
+              )}
+            </div>
           </div>
         </div>
 
