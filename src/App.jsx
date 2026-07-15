@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { DAILY_DATA } from "./data";
 import { DayList } from "./components/DayList";
 import { DayPractice } from "./components/DayPractice";
+import { syncEventToScheduler } from "./utils/schedulerSync";
 
 function App() {
   const [dayDataList, setDayDataList] = useState(DAILY_DATA);
@@ -13,6 +14,9 @@ function App() {
   const [medals, setMedals] = useState({});
   const [sensitivity, setSensitivity] = useState(70);
   const [streak, setStreak] = useState(0);
+  const [supabaseUrl, setSupabaseUrl] = useState("");
+  const [supabaseKey, setSupabaseKey] = useState("");
+  const [syncEnabled, setSyncEnabled] = useState(false);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
   useEffect(() => {
@@ -37,10 +41,37 @@ function App() {
       if (storedStreak) {
         setStreak(parseInt(storedStreak, 10));
       }
+      const storedUrl = localStorage.getItem("daily_english_supabase_url");
+      if (storedUrl) {
+        setSupabaseUrl(storedUrl);
+      }
+      const storedKey = localStorage.getItem("daily_english_supabase_key");
+      if (storedKey) {
+        setSupabaseKey(storedKey);
+      }
+      const storedSync = localStorage.getItem("daily_english_supabase_sync_enabled");
+      if (storedSync) {
+        setSyncEnabled(storedSync === "true");
+      }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
     }
   }, []);
+
+  const handleSupabaseUrlChange = (val) => {
+    setSupabaseUrl(val);
+    localStorage.setItem("daily_english_supabase_url", val);
+  };
+
+  const handleSupabaseKeyChange = (val) => {
+    setSupabaseKey(val);
+    localStorage.setItem("daily_english_supabase_key", val);
+  };
+
+  const handleSyncEnabledChange = (val) => {
+    setSyncEnabled(val);
+    localStorage.setItem("daily_english_supabase_sync_enabled", String(val));
+  };
 
   // Save progress to LocalStorage when it changes
   const handleMarkSentenceCorrect = (dayNum, sentenceId, isCorrect) => {
@@ -97,11 +128,23 @@ function App() {
   };
 
   // Streak counter tracking system
-  const handleDayCompleted = (dayNum) => {
+  const handleDayCompleted = (dayNum, dayTitle) => {
     const todayStr = new Date().toLocaleDateString("en-CA");
     const lastCompleteDate = localStorage.getItem("daily_english_last_complete_date");
     
     let newStreak = streak;
+
+    // Trigger Scheduler Sync if enabled
+    if (syncEnabled) {
+      const title = dayTitle || dayDataList.find(d => d.day === dayNum)?.title || "영어 회화";
+      syncEventToScheduler(dayNum, title, supabaseUrl, supabaseKey).then(res => {
+        if (res.success) {
+          console.log("스케줄러 연동 성공!");
+        } else {
+          console.warn("스케줄러 연동 실패:", res.error);
+        }
+      });
+    }
 
     if (lastCompleteDate === todayStr) {
       return; // Already completed today
@@ -462,6 +505,71 @@ function App() {
           <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "center", fontWeight: "600" }}>
             {sensitivity === 60 ? "주변에 소음이 있거나 입문자분들께 권장합니다." : sensitivity === 70 ? "훈상링고 권장 기본 통과 감도입니다." : "원어민 수준에 필적하는 정밀한 발음에 도전합니다."}
           </div>
+        </div>
+
+        {/* Supabase Sync Integration Panel */}
+        <div className="sensitivity-control-panel" style={{ padding: "16px", background: "#F2F2F7", borderRadius: "20px", margin: "16px 0", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>📅 Supabase 클라우드 연동</span>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <input 
+                type="checkbox" 
+                id="scheduler-sync-toggle"
+                checked={syncEnabled} 
+                onChange={(e) => handleSyncEnabledChange(e.target.checked)} 
+                style={{ cursor: "pointer", width: "16px", height: "16px" }}
+              />
+              <label htmlFor="scheduler-sync-toggle" style={{ fontSize: "12px", fontWeight: "750", color: "var(--text-secondary)", cursor: "pointer" }}>활성화</label>
+            </div>
+          </div>
+
+          {syncEnabled && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", borderTop: "1px solid #E5E5EA", paddingTop: "12px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)", textAlign: "left" }}>Supabase URL</span>
+                <input 
+                  type="text" 
+                  value={supabaseUrl} 
+                  onChange={(e) => handleSupabaseUrlChange(e.target.value)} 
+                  placeholder="https://xxxx.supabase.co" 
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1.5px solid #E2E8F0",
+                    fontSize: "12px",
+                    outline: "none",
+                    fontFamily: "monospace",
+                    background: "#FFFFFF",
+                    boxSizing: "border-box",
+                    width: "100%"
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)", textAlign: "left" }}>Supabase Anon Key</span>
+                <input 
+                  type="password" 
+                  value={supabaseKey} 
+                  onChange={(e) => handleSupabaseKeyChange(e.target.value)} 
+                  placeholder="Publishable Key (anon)" 
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1.5px solid #E2E8F0",
+                    fontSize: "12px",
+                    outline: "none",
+                    fontFamily: "monospace",
+                    background: "#FFFFFF",
+                    boxSizing: "border-box",
+                    width: "100%"
+                  }}
+                />
+              </div>
+              <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.4", textAlign: "left", fontWeight: "600" }}>
+                * Supabase 프로젝트 API 설정에서 확인한 URL 및 Publishable Key를 입력해 주세요.
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="duo-sheet-actions">

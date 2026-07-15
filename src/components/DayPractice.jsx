@@ -69,10 +69,10 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   useEffect(() => {
     if (isCompleted && mode !== "test") {
       if (onDayCompleted) {
-        onDayCompleted(dayData.day);
+        onDayCompleted(dayData.day, dayData.title);
       }
     }
-  }, [isCompleted, mode, dayData.day, onDayCompleted]);
+  }, [isCompleted, mode, dayData.day, dayData.title, onDayCompleted]);
 
   // Clean up recording on unmount
   useEffect(() => {
@@ -339,7 +339,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             onSaveMedal(dayData.day, medalType);
           }
           if (onDayCompleted) {
-            onDayCompleted(dayData.day);
+            onDayCompleted(dayData.day, dayData.title);
           }
           setTestStatus("passed");
         } else {
