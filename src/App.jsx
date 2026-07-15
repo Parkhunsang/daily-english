@@ -17,7 +17,7 @@ function App() {
   const [supabaseUrl, setSupabaseUrl] = useState("");
   const [supabaseKey, setSupabaseKey] = useState("");
   const [syncEnabled, setSyncEnabled] = useState(false);
-  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [preferredAi, setPreferredAi] = useState("chatgpt");
   const [practiceStartTime, setPracticeStartTime] = useState(null);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
@@ -55,9 +55,9 @@ function App() {
       if (storedSync) {
         setSyncEnabled(storedSync === "true");
       }
-      const storedGeminiKey = localStorage.getItem("daily_english_gemini_api_key");
-      if (storedGeminiKey) {
-        setGeminiApiKey(storedGeminiKey);
+      const storedPreferredAi = localStorage.getItem("daily_english_preferred_ai");
+      if (storedPreferredAi) {
+        setPreferredAi(storedPreferredAi);
       }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
@@ -79,9 +79,9 @@ function App() {
     localStorage.setItem("daily_english_supabase_sync_enabled", String(val));
   };
 
-  const handleGeminiApiKeyChange = (val) => {
-    setGeminiApiKey(val);
-    localStorage.setItem("daily_english_gemini_api_key", val);
+  const handlePreferredAiChange = (val) => {
+    setPreferredAi(val);
+    localStorage.setItem("daily_english_preferred_ai", val);
   };
 
   // Save progress to LocalStorage when it changes
@@ -378,9 +378,7 @@ function App() {
                   onSaveMedal={handleSaveMedal}
                   passingThreshold={sensitivity}
                   onDayCompleted={handleDayCompleted}
-                  geminiApiKey={geminiApiKey}
-                  supabaseUrl={supabaseUrl}
-                  supabaseKey={supabaseKey}
+                  preferredAi={preferredAi}
                 />
               )}
             </div>
@@ -526,67 +524,46 @@ function App() {
           </div>
         </div>
 
-        {/* Gemini AI Integration Panel */}
+        {/* Preferred AI Launcher Selector Panel */}
         <div className="sensitivity-control-panel" style={{ padding: "16px", background: "#F2F2F7", borderRadius: "20px", margin: "16px 0", boxSizing: "border-box" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>✨ Gemini AI 실시간 해설 연동</span>
-            <span style={{
-              fontSize: "10.5px",
-              fontWeight: "800",
-              color: (supabaseUrl && supabaseKey) 
-                ? "var(--success-color)" 
-                : geminiApiKey 
-                  ? "var(--success-color)" 
-                  : "var(--error-color)",
-              background: (supabaseUrl && supabaseKey) 
-                ? "rgba(0, 200, 151, 0.08)" 
-                : geminiApiKey 
-                  ? "rgba(0, 200, 151, 0.08)" 
-                  : "rgba(255, 59, 48, 0.08)",
-              padding: "2px 8px",
-              borderRadius: "10px"
-            }}>
-              {(supabaseUrl && supabaseKey) 
-                ? "🟢 Supabase 보안 프록시" 
-                : geminiApiKey 
-                  ? "🟢 개인 API Key" 
-                  : "🔴 비활성화됨"}
+            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>🤖 연동할 외부 AI 서비스</span>
+            <span style={{ fontSize: "11.5px", fontWeight: "800", color: "var(--accent-color)" }}>
+              {preferredAi === "chatgpt" ? "ChatGPT" : "Gemini"}
             </span>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "12px", borderTop: "1px solid #E5E5EA", paddingTop: "12px" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontSize: "11px", fontWeight: "750", color: "var(--text-secondary)" }}>Gemini API Key (개인 입력용)</span>
-                <a 
-                  href="https://aistudio.google.com/" 
-                  target="_blank" 
-                  rel="noopener noreferrer" 
-                  style={{ fontSize: "10.5px", fontWeight: "800", color: "var(--accent-color)", textDecoration: "none" }}
-                >
-                  무료 API 키 발급받기 ↗
-                </a>
-              </div>
-              <input 
-                type="text" 
-                value={geminiApiKey} 
-                onChange={(e) => handleGeminiApiKeyChange(e.target.value)} 
-                placeholder="AI_KEY_..." 
+          
+          <div style={{ display: "flex", gap: "8px", width: "100%", marginTop: "10px" }}>
+            {[
+              { id: "chatgpt", label: "💬 ChatGPT (추천)" },
+              { id: "gemini", label: "✨ Google Gemini" }
+            ].map((ai) => (
+              <button
+                key={ai.id}
+                onClick={() => handlePreferredAiChange(ai.id)}
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: "10px",
-                  border: "1.5px solid #E2E8F0",
+                  flex: 1,
+                  padding: "10px 0",
+                  borderRadius: "12px",
+                  border: "2px solid",
+                  borderColor: preferredAi === ai.id ? "var(--accent-color)" : "#E2E8F0",
+                  background: preferredAi === ai.id ? "rgba(124, 58, 237, 0.05)" : "#FFFFFF",
+                  color: preferredAi === ai.id ? "var(--accent-color)" : "var(--text-secondary)",
+                  fontWeight: "800",
                   fontSize: "12px",
-                  outline: "none",
-                  fontFamily: "monospace",
-                  background: "#FFFFFF",
-                  boxSizing: "border-box",
-                  width: "100%"
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  boxShadow: preferredAi === ai.id ? "none" : "0 2px 6px rgba(0,0,0,0.02)"
                 }}
-              />
-            </div>
-            <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.45", textAlign: "left", fontWeight: "600" }}>
-              * Supabase 프로젝트에 보안 프록시 함수(explain-sentence)가 배포되지 않은 경우, 위 입력칸에 개인 Gemini API Key를 등록하여 직접 연동하여 사용해 주세요.
-            </div>
+              >
+                {ai.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "center", fontWeight: "600", lineHeight: "1.45" }}>
+            {preferredAi === "chatgpt" 
+              ? "버튼 클릭 시 ChatGPT 창이 열리며 질문이 자동으로 즉시 실행됩니다." 
+              : "질문 텍스트가 클립보드에 자동 복사됩니다. Gemini 창이 열리면 붙여넣기(Ctrl+V) 하세요."}
           </div>
         </div>
 

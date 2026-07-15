@@ -2,51 +2,14 @@ import React, { useState, useEffect, useRef } from "react";
 import { AudioVisualizer } from "./AudioVisualizer";
 import { Confetti } from "./Confetti";
 import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
-import { fetchSentenceExplanation } from "../utils/geminiApi";
+import { askExternalAi } from "../utils/aiLauncher";
 
-export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, geminiApiKey, supabaseUrl, supabaseKey }) {
+export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
 
-  // AI Explanation States
-  const [activeAiExplainSentence, setActiveAiExplainSentence] = useState(null); // { en: string, ko: string }
-  const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState(null);
-  const [aiActiveTab, setAiActiveTab] = useState("grammar"); // "grammar" | "vocab" | "alternatives"
-  const [aiCache, setAiCache] = useState({}); // { [cleanEn]: parsedJson }
-
-  const handleRequestAiExplanation = async (sentenceEn, sentenceKo) => {
-    const cleanEn = sentenceEn.replace(/\*/g, "").trim();
-    
-    // 1. Check cache first
-    if (aiCache[cleanEn]) {
-      setActiveAiExplainSentence({ en: sentenceEn, ko: sentenceKo });
-      setAiActiveTab("grammar");
-      setAiError(null);
-      return;
-    }
-
-    // 2. Open sheet and set loading state
-    setActiveAiExplainSentence({ en: sentenceEn, ko: sentenceKo });
-    setAiLoading(true);
-    setAiError(null);
-    setAiActiveTab("grammar");
-
-    try {
-      if (!geminiApiKey && !(supabaseUrl && supabaseKey)) {
-        throw new Error("AI 해설을 이용하려면 설정⚙️에서 Supabase 연동을 활성화하거나, 개인 Gemini API Key를 등록해 주세요.");
-      }
-      const data = await fetchSentenceExplanation(sentenceEn, sentenceKo, geminiApiKey, supabaseUrl, supabaseKey);
-      setAiCache(prev => ({
-        ...prev,
-        [cleanEn]: data
-      }));
-    } catch (err) {
-      console.error("AI Explanation error:", err);
-      setAiError(err.message || "설명을 불러오는 중 에러가 발생했습니다.");
-    } finally {
-      setAiLoading(false);
-    }
+  const handleRequestAiExplanation = (sentenceEn, sentenceKo) => {
+    askExternalAi(sentenceEn, sentenceKo, preferredAi);
   };
 
   // Find the first uncompleted sentence index
@@ -561,7 +524,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                         transition: "all 0.2s"
                       }}
                     >
-                      ✨ AI 설명
+                      💬 AI 질문
                     </button>
                   </div>
                 </div>
@@ -717,7 +680,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                           transition: "all 0.2s"
                         }}
                       >
-                        ✨ AI 설명
+                        💬 AI 질문
                       </button>
                     )}
                   </>
@@ -875,7 +838,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
                                 transition: "all 0.2s"
                               }}
                             >
-                              ✨ 이 문장이 왜 그럴까요? AI 설명 보기
+                              💬 AI에게 이 문장 질문하기
                             </button>
                           </>
                         ) : null}
@@ -938,175 +901,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
         </div>
       )}
-
-      {/* AI Explanation Bottom Sheet */}
-      {activeAiExplainSentence && (
-        <div 
-          className="duo-sheet-backdrop" 
-          onClick={() => {
-            if (!aiLoading) setActiveAiExplainSentence(null);
-          }}
-          style={{ zIndex: 999 }}
-        />
-      )}
-
-      <div className={`duo-bottom-sheet ai-explain-sheet ${activeAiExplainSentence ? "open" : ""}`} style={{ paddingBottom: "calc(var(--safe-bottom) + 30px)", zIndex: 1000 }}>
-        <div className="duo-sheet-handle"></div>
-        <div className="duo-sheet-header" style={{ position: "relative" }}>
-          <span className="duo-sheet-day" style={{ background: "linear-gradient(90deg, #7C3AED 0%, #FF5A5F 100%)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", fontWeight: "800", fontSize: "11px", letterSpacing: "1px" }}>
-            ✨ HUNSANGLINGO AI ASSISTANT
-          </span>
-          <button 
-            onClick={() => setActiveAiExplainSentence(null)}
-            style={{
-              position: "absolute",
-              right: "0",
-              top: "4px",
-              background: "none",
-              border: "none",
-              color: "var(--text-muted)",
-              fontSize: "20px",
-              cursor: "pointer",
-              padding: "4px"
-            }}
-          >
-            ✕
-          </button>
-          <h3 className="duo-sheet-title" style={{ fontSize: "17px", fontWeight: "800", marginTop: "4px", paddingRight: "24px" }}>
-            {activeAiExplainSentence ? `"${activeAiExplainSentence.en.replace(/\*/g, "")}"` : ""}
-          </h3>
-          {activeAiExplainSentence && (
-            <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "2px", fontWeight: "600" }}>
-              {activeAiExplainSentence.ko}
-            </div>
-          )}
-        </div>
-
-        <div className="ai-sheet-content" style={{ minHeight: "220px", marginTop: "16px" }}>
-          {aiLoading ? (
-            /* Premium Loading Skeleton */
-            <div className="ai-skeleton-container" style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid rgba(0,0,0,0.05)", paddingBottom: "12px" }}>
-                <div className="skeleton-tab pulse" style={{ width: "80px", height: "28px", borderRadius: "14px", background: "#E5E5EA" }}></div>
-                <div className="skeleton-tab pulse" style={{ width: "80px", height: "28px", borderRadius: "14px", background: "#E5E5EA" }}></div>
-                <div className="skeleton-tab pulse" style={{ width: "80px", height: "28px", borderRadius: "14px", background: "#E5E5EA" }}></div>
-              </div>
-              <div className="skeleton-line pulse" style={{ width: "100%", height: "16px", borderRadius: "8px", background: "#E5E5EA" }}></div>
-              <div className="skeleton-line pulse" style={{ width: "90%", height: "16px", borderRadius: "8px", background: "#E5E5EA" }}></div>
-              <div className="skeleton-line pulse" style={{ width: "75%", height: "16px", borderRadius: "8px", background: "#E5E5EA" }}></div>
-              <div className="skeleton-line pulse" style={{ width: "85%", height: "16px", borderRadius: "8px", background: "#E5E5EA" }}></div>
-            </div>
-          ) : aiError ? (
-            /* Error Panel */
-            <div className="ai-error-panel" style={{ textAlign: "center", padding: "20px 10px" }}>
-              <div style={{ fontSize: "40px", marginBottom: "12px" }}>⚠️</div>
-              <div style={{ fontSize: "14px", fontWeight: "750", color: "var(--error-color)", marginBottom: "8px" }}>
-                {aiError}
-              </div>
-              <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: "1.45" }}>
-                기존 설정(Settings⚙️) 페이지에서 올바른 API 키를 등록하였는지 확인해 주세요.
-              </div>
-            </div>
-          ) : activeAiExplainSentence && aiCache[activeAiExplainSentence.en.replace(/\*/g, "").trim()] ? (
-            /* Explanation Tabs */
-            (() => {
-              const explanation = aiCache[activeAiExplainSentence.en.replace(/\*/g, "").trim()];
-              return (
-                <div>
-                  {/* Tab Bar */}
-                  <div style={{ display: "flex", gap: "6px", borderBottom: "1px solid rgba(0,0,0,0.05)", paddingBottom: "10px", marginBottom: "16px" }}>
-                    {[
-                      { id: "grammar", label: "💡 문장 분석" },
-                      { id: "vocab", label: "📖 단어 해설" },
-                      { id: "alternatives", label: "🔄 유사 표현" }
-                    ].map((tab) => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setAiActiveTab(tab.id)}
-                        style={{
-                          padding: "6px 14px",
-                          borderRadius: "20px",
-                          border: "none",
-                          background: aiActiveTab === tab.id ? "var(--accent-color)" : "rgba(0,0,0,0.04)",
-                          color: aiActiveTab === tab.id ? "#FFFFFF" : "var(--text-secondary)",
-                          fontWeight: "800",
-                          fontSize: "12.5px",
-                          cursor: "pointer",
-                          transition: "all 0.15s ease",
-                          boxShadow: aiActiveTab === tab.id ? "0 4px 10px rgba(124, 58, 237, 0.25)" : "none"
-                        }}
-                      >
-                        {tab.label}
-                      </button>
-                    ))}
-                  </div>
-
-                  {/* Tab Contents */}
-                  <div className="ai-tab-content" style={{ maxHeight: "250px", overflowY: "auto", paddingRight: "4px" }}>
-                    {aiActiveTab === "grammar" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {explanation.grammar && explanation.grammar.length > 0 ? (
-                          explanation.grammar.map((item, idx) => (
-                            <div key={idx} style={{ background: "rgba(124, 58, 237, 0.03)", border: "1.5px solid rgba(124, 58, 237, 0.08)", borderRadius: "14px", padding: "12px" }}>
-                              <div style={{ fontSize: "13.5px", fontWeight: "800", color: "var(--accent-color)", marginBottom: "4px" }}>
-                                {item.pattern}
-                              </div>
-                              <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-                                {item.explanation}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ fontSize: "12.5px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>문법 해설 정보가 없습니다.</div>
-                        )}
-                      </div>
-                    )}
-
-                    {aiActiveTab === "vocab" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {explanation.vocabulary && explanation.vocabulary.length > 0 ? (
-                          explanation.vocabulary.map((item, idx) => (
-                            <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "2px", borderBottom: "1px solid rgba(0,0,0,0.04)", paddingBottom: "10px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                                <span style={{ fontSize: "13.5px", fontWeight: "750", color: "var(--accent-color)" }}>{item.word}</span>
-                                <span style={{ fontSize: "12.5px", fontWeight: "600", color: "var(--text-secondary)" }}>{item.meaning}</span>
-                              </div>
-                              <div style={{ fontSize: "11px", color: "var(--text-muted)", fontStyle: "italic", marginTop: "2px", background: "#F8F9FC", padding: "6px 10px", borderRadius: "8px", borderLeft: "2px solid #E2E8F0" }}>
-                                ex: {item.example}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ fontSize: "12.5px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>단어 해설 정보가 없습니다.</div>
-                        )}
-                      </div>
-                    )}
-
-                    {aiActiveTab === "alternatives" && (
-                      <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                        {explanation.alternatives && explanation.alternatives.length > 0 ? (
-                          explanation.alternatives.map((item, idx) => (
-                            <div key={idx} style={{ background: "rgba(255, 90, 95, 0.03)", border: "1.5px solid rgba(255, 90, 95, 0.08)", borderRadius: "14px", padding: "12px" }}>
-                              <div style={{ fontSize: "13.5px", fontWeight: "800", color: "#FF5A5F", marginBottom: "4px" }}>
-                                {item.expression}
-                              </div>
-                              <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.5" }}>
-                                {item.meaning}
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ fontSize: "12.5px", color: "var(--text-muted)", textAlign: "center", padding: "20px 0" }}>유사 표현 정보가 없습니다.</div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })()
-          ) : null}
-        </div>
-      </div>
     </div>
   );
 }
