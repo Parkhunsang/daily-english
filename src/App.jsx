@@ -601,10 +601,11 @@ function App() {
           </div>
           
           <input 
-            type="password" 
+            type="text" 
             value={geminiApiKey} 
             onChange={(e) => handleGeminiKeyChange(e.target.value)} 
             placeholder="Gemini API 키를 입력하세요" 
+            autoComplete="off"
             style={{
               padding: "8px 12px",
               borderRadius: "10px",
@@ -614,7 +615,8 @@ function App() {
               fontFamily: "monospace",
               background: "#FFFFFF",
               boxSizing: "border-box",
-              width: "100%"
+              width: "100%",
+              WebkitTextSecurity: "disc" // Mask characters visually without triggering browser password managers
             }}
           />
           <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "left", fontWeight: "600", lineHeight: "1.4" }}>

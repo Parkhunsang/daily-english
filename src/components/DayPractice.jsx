@@ -368,8 +368,10 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       }
     };
 
-    // Initialize state
+    // Initialize state & Reset rate limit status when dialogue or API key changes
     setTtsLoadStatus({ loaded: 0, total, finished: false });
+    setIsRateLimited(false);
+    ttsSuspendedRef.current = false;
 
     loadAndPrefetchAll();
 
