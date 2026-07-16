@@ -111,7 +111,11 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     // Use Google Translate TTS URL
     const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
     
-    const audio = new Audio(ttsUrl);
+    const audio = new Audio();
+    // Critical: Strip referrer to bypass Google's 403 Forbidden block on third-party origins
+    audio.setAttribute("referrerpolicy", "no-referrer");
+    audio.referrerPolicy = "no-referrer";
+    audio.src = ttsUrl;
     ttsAudioRef.current = audio;
 
     audio.play().catch(err => {
@@ -121,7 +125,14 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         const actualUtterance = new SpeechSynthesisUtterance(cleanText);
         actualUtterance.lang = "en-US";
         const voices = window.speechSynthesis.getVoices();
-        const usVoice = voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en"));
+        
+        // Prioritize natural voices like Google US English or Microsoft Online (natural) voices
+        const usVoice = 
+          voices.find(v => v.lang === "en-US" && v.name.includes("Google")) || 
+          voices.find(v => v.name.includes("Online") && (v.lang === "en-US" || v.lang.startsWith("en"))) ||
+          voices.find(v => v.lang === "en-US") || 
+          voices.find(v => v.lang.startsWith("en"));
+
         if (usVoice) {
           actualUtterance.voice = usVoice;
         }
