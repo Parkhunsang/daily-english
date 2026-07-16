@@ -4,7 +4,7 @@ import { Confetti } from "./Confetti";
 import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
 import { askExternalAi } from "../utils/aiLauncher";
 
-export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi }) {
+export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi, geminiApiKey }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
 
@@ -108,19 +108,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     const cleanText = text.replace(/\*/g, "").trim();
     if (!cleanText) return;
 
-    // Use Google Translate TTS URL
-    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
-    
-    const audio = new Audio();
-    // Critical: Strip referrer to bypass Google's 403 Forbidden block on third-party origins
-    audio.setAttribute("referrerpolicy", "no-referrer");
-    audio.referrerPolicy = "no-referrer";
-    audio.src = ttsUrl;
-    ttsAudioRef.current = audio;
-
-    audio.play().catch(err => {
-      console.warn("AI TTS playback failed, falling back to browser synthesis.", err);
-      // Fallback to browser's native speech synthesis
+    // Local native fallback function to keep code clean and prevent duplicate code blocks
+    const playFallback = () => {
       if ("speechSynthesis" in window) {
         const actualUtterance = new SpeechSynthesisUtterance(cleanText);
         actualUtterance.lang = "en-US";
@@ -128,7 +117,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         
         console.log("Fallback SpeechSynthesis Voices available:", voices.map(v => `${v.name} (${v.lang})`));
         
-        // Prioritize natural voices like Google US English or Microsoft Online (natural) voices
         const usVoice = 
           voices.find(v => v.lang === "en-US" && v.name.includes("Google")) || 
           voices.find(v => v.name.includes("Online") && (v.lang === "en-US" || v.lang.startsWith("en"))) ||
@@ -143,7 +131,74 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       } else {
         alert("이 브라우저는 음성 합성(TTS)을 지원하지 않습니다.");
       }
-    });
+    };
+
+    if (geminiApiKey) {
+      // Use Gemini API for high-quality audio generation
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+      
+      const payload = {
+        contents: [{
+          parts: [{
+            text: `Read this English sentence. Do not add any extra commentary or text, just say this sentence clearly: "${cleanText}"`
+          }]
+        }],
+        generationConfig: {
+          responseModalities: ["AUDIO"],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: "Aoede" // Premium female voice. Other options: Puck, Kore, Fenrir, Charon
+              }
+            }
+          }
+        }
+      };
+
+      fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      })
+      .then(res => {
+        if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
+        return res.json();
+      })
+      .then(data => {
+        const candidate = data.candidates?.[0];
+        const partWithAudio = candidate?.content?.parts?.find(p => p.inlineData);
+        if (!partWithAudio || !partWithAudio.inlineData?.data) {
+          throw new Error("No audio data returned from Gemini API");
+        }
+        const base64Data = partWithAudio.inlineData.data;
+        const mimeType = partWithAudio.inlineData.mimeType || "audio/x-wav";
+
+        // Convert base64 data to binary bytes
+        const binaryString = atob(base64Data);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+
+        const blob = new Blob([bytes], { type: mimeType });
+        const audioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(audioUrl);
+        ttsAudioRef.current = audio;
+        audio.play().catch(err => {
+          console.warn("Gemini Audio play failed, falling back.", err);
+          playFallback();
+        });
+      })
+      .catch(err => {
+        console.warn("Gemini API call failed, falling back to browser synthesis.", err);
+        playFallback();
+      });
+    } else {
+      // If no API key, use fallback browser speech synthesis directly
+      playFallback();
+    }
   };
 
   const toggleHint = (index) => {

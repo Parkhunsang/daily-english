@@ -3,6 +3,21 @@ import { DAILY_DATA } from "./data";
 import { DayList } from "./components/DayList";
 import { DayPractice } from "./components/DayPractice";
 import { syncEventToScheduler } from "./utils/schedulerSync";
+// Helper functions to safely obfuscate API keys in localStorage
+const encodeKey = (str) => {
+  if (!str) return "";
+  return btoa(encodeURIComponent(str).split("").reverse().join(""));
+};
+
+const decodeKey = (str) => {
+  if (!str) return "";
+  try {
+    const decoded = atob(str).split("").reverse().join("");
+    return decodeURIComponent(decoded);
+  } catch (e) {
+    return str; // Fallback for pre-existing plain text values
+  }
+};
 
 function App() {
   const [dayDataList, setDayDataList] = useState(DAILY_DATA);
@@ -18,6 +33,7 @@ function App() {
   const [supabaseKey, setSupabaseKey] = useState("");
   const [syncEnabled, setSyncEnabled] = useState(false);
   const [preferredAi, setPreferredAi] = useState("chatgpt");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
   const [practiceStartTime, setPracticeStartTime] = useState(null);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
@@ -59,6 +75,10 @@ function App() {
       if (storedPreferredAi) {
         setPreferredAi(storedPreferredAi);
       }
+      const storedGeminiKey = localStorage.getItem("daily_english_gemini_key");
+      if (storedGeminiKey) {
+        setGeminiApiKey(decodeKey(storedGeminiKey));
+      }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
     }
@@ -82,6 +102,11 @@ function App() {
   const handlePreferredAiChange = (val) => {
     setPreferredAi(val);
     localStorage.setItem("daily_english_preferred_ai", val);
+  };
+
+  const handleGeminiKeyChange = (val) => {
+    setGeminiApiKey(val);
+    localStorage.setItem("daily_english_gemini_key", encodeKey(val));
   };
 
   // Save progress to LocalStorage when it changes
@@ -379,6 +404,7 @@ function App() {
                   passingThreshold={sensitivity}
                   onDayCompleted={handleDayCompleted}
                   preferredAi={preferredAi}
+                  geminiApiKey={geminiApiKey}
                 />
               )}
             </div>
@@ -564,6 +590,35 @@ function App() {
             {preferredAi === "chatgpt" 
               ? "버튼 클릭 시 ChatGPT 창이 열리며 질문이 자동으로 즉시 실행됩니다." 
               : "질문 텍스트가 클립보드에 자동 복사됩니다. Gemini 창이 열리면 붙여넣기(Ctrl+V) 하세요."}
+          </div>
+        </div>
+
+        {/* Gemini API Key Panel */}
+        <div className="sensitivity-control-panel" style={{ padding: "16px", background: "#F2F2F7", borderRadius: "20px", margin: "16px 0", boxSizing: "border-box" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+            <span style={{ fontSize: "13px", fontWeight: "750", color: "var(--text-primary)" }}>✨ Gemini API 키 설정</span>
+            <span style={{ fontSize: "11px", fontWeight: "600", color: "var(--text-muted)" }}>원어민 발음용</span>
+          </div>
+          
+          <input 
+            type="password" 
+            value={geminiApiKey} 
+            onChange={(e) => handleGeminiKeyChange(e.target.value)} 
+            placeholder="Gemini API 키를 입력하세요" 
+            style={{
+              padding: "8px 12px",
+              borderRadius: "10px",
+              border: "1.5px solid #E2E8F0",
+              fontSize: "12px",
+              outline: "none",
+              fontFamily: "monospace",
+              background: "#FFFFFF",
+              boxSizing: "border-box",
+              width: "100%"
+            }}
+          />
+          <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "8px", textAlign: "left", fontWeight: "600", lineHeight: "1.4" }}>
+            * API 키 입력 시 로봇이 아닌 **실제 원어민 수준의 자연스러운 Gemini AI 발음(Aoede 목소리)**으로 학습 문장을 재생합니다.
           </div>
         </div>
 
