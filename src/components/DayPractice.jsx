@@ -79,6 +79,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
   const ttsAudioRef = useRef(null);
+  const ttsAudioCacheRef = useRef({}); // Cache for Gemini TTS Blob URLs
 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
@@ -95,6 +96,12 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setResult(null);
     setRevealedHints({});
     setIsTyping(false);
+
+    // Clear TTS audio cache when switching days or modes to free up browser memory
+    if (ttsAudioCacheRef.current) {
+      Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
+      ttsAudioCacheRef.current = {};
+    }
   }, [dayData, mode]);
 
   // Trigger typing indicator on B's turn change
@@ -129,8 +136,92 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         ttsAudioRef.current.pause();
         ttsAudioRef.current = null;
       }
+      // Clean up cached audio URLs
+      if (ttsAudioCacheRef.current) {
+        Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
+        ttsAudioCacheRef.current = {};
+      }
     };
   }, []);
+
+  // Background pre-fetch helper for Gemini TTS
+  const prefetchTTS = (text) => {
+    const cleanText = text.replace(/\*/g, "").trim();
+    if (!cleanText || !geminiApiKey || ttsAudioCacheRef.current[cleanText]) return;
+
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`;
+    const payload = {
+      contents: [{
+        parts: [{
+          text: cleanText // Dedicated TTS model parses raw text directly & faster
+        }]
+      }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: {
+              voiceName: "Aoede"
+            }
+          }
+        }
+      }
+    };
+
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    })
+    .then(res => {
+      if (!res.ok) throw new Error("status " + res.status);
+      return res.json();
+    })
+    .then(data => {
+      const candidate = data.candidates?.[0];
+      const partWithAudio = candidate?.content?.parts?.find(p => p.inlineData);
+      if (partWithAudio && partWithAudio.inlineData?.data) {
+        const base64Data = partWithAudio.inlineData.data;
+        const binaryString = atob(base64Data);
+        const pcmBytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          pcmBytes[i] = binaryString.charCodeAt(i);
+        }
+        const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
+        const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
+        wavBytes.set(wavHeader, 0);
+        wavBytes.set(pcmBytes, wavHeader.length);
+
+        const blob = new Blob([wavBytes], { type: "audio/wav" });
+        const audioUrl = URL.createObjectURL(blob);
+        ttsAudioCacheRef.current[cleanText] = audioUrl;
+        console.log(`Prefetched audio for: "${cleanText}"`);
+      }
+    })
+    .catch(err => {
+      console.warn(`Prefetch failed for: "${cleanText}"`, err);
+    });
+  };
+
+  // Prefetch active and lookahead sentences when activeTurnIndex changes
+  useEffect(() => {
+    if (!geminiApiKey || !dialogue) return;
+    
+    // 1. Prefetch current active sentence
+    if (activeTurnIndex < dialogue.length) {
+      prefetchTTS(dialogue[activeTurnIndex].en);
+    }
+    // 2. Prefetch next sentence (look ahead)
+    if (activeTurnIndex + 1 < dialogue.length) {
+      // Add slight delay for lookahead to prevent API congestion
+      const timer = setTimeout(() => {
+        prefetchTTS(dialogue[activeTurnIndex + 1].en);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [activeTurnIndex, dialogue, geminiApiKey]);
 
   const handleSpeakTTS = (text, e) => {
     if (e) e.stopPropagation();
@@ -174,6 +265,18 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       }
     };
 
+    // 1. Check if cached
+    if (ttsAudioCacheRef.current[cleanText]) {
+      console.log(`Playing from cache for: "${cleanText}"`);
+      const audio = new Audio(ttsAudioCacheRef.current[cleanText]);
+      ttsAudioRef.current = audio;
+      audio.play().catch(err => {
+        console.warn("Cached audio play failed, falling back.", err);
+        playFallback();
+      });
+      return;
+    }
+
     if (geminiApiKey) {
       // Use Gemini API for high-quality audio generation
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`;
@@ -181,7 +284,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       const payload = {
         contents: [{
           parts: [{
-            text: `Read this English sentence. Do not add any extra commentary or text, just say this sentence clearly: "${cleanText}"`
+            text: cleanText // Simplified text prompt for faster processing
           }]
         }],
         generationConfig: {
@@ -189,7 +292,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: "Aoede" // Premium female voice. Other options: Puck, Kore, Fenrir, Charon
+                voiceName: "Aoede"
               }
             }
           }
@@ -208,7 +311,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           try {
             const errJson = await res.json();
             console.error("Gemini API Error Response:", errJson);
-            throw new Error(`Gemini API error: ${res.status} - ${errJson.error?.message || "Unknown"}`);
+            throw new Error(`Gemini API error: ${res.status}`);
           } catch (e) {
             throw new Error(`Gemini API error: ${res.status}`);
           }
@@ -231,7 +334,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         }
 
         // Gemini returns raw PCM at 24000Hz (24kHz), 16-bit, 1 channel (mono)
-        // We must prepend a standard 44-byte WAV header so HTML5 Audio can play it natively
         const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
         const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
         wavBytes.set(wavHeader, 0);
@@ -239,6 +341,10 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
         const blob = new Blob([wavBytes], { type: "audio/wav" });
         const audioUrl = URL.createObjectURL(blob);
+        
+        // Store in cache
+        ttsAudioCacheRef.current[cleanText] = audioUrl;
+
         const audio = new Audio(audioUrl);
         ttsAudioRef.current = audio;
         audio.play().catch(err => {
