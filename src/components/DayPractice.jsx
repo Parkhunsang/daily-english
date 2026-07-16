@@ -126,6 +126,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         actualUtterance.lang = "en-US";
         const voices = window.speechSynthesis.getVoices();
         
+        console.log("Fallback SpeechSynthesis Voices available:", voices.map(v => `${v.name} (${v.lang})`));
+        
         // Prioritize natural voices like Google US English or Microsoft Online (natural) voices
         const usVoice = 
           voices.find(v => v.lang === "en-US" && v.name.includes("Google")) || 
@@ -134,6 +136,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           voices.find(v => v.lang.startsWith("en"));
 
         if (usVoice) {
+          console.log("Selected voice for fallback:", usVoice.name);
           actualUtterance.voice = usVoice;
         }
         window.speechSynthesis.speak(actualUtterance);
