@@ -91,6 +91,16 @@ const saveCachedAudio = async (key, blob) => {
   }
 };
 
+// Module-level global caches to prevent duplicate requests from React's StrictMode double-mounting
+const globalTtsAudioCache = {};
+const globalTtsAudioFetching = {};
+
+const clearGlobalTtsCache = () => {
+  Object.values(globalTtsAudioCache).forEach(url => URL.revokeObjectURL(url));
+  for (const key in globalTtsAudioCache) delete globalTtsAudioCache[key];
+  for (const key in globalTtsAudioFetching) delete globalTtsAudioFetching[key];
+};
+
 export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi, geminiApiKey }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
@@ -128,8 +138,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
   const ttsAudioRef = useRef(null);
-  const ttsAudioCacheRef = useRef({}); // Cache for Gemini TTS Blob URLs
-  const ttsAudioFetchingRef = useRef({}); // Tracks ongoing fetch promises to prevent duplicate requests
+  // Caching refs moved to module-level globals to prevent StrictMode double-fetch issues
 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
@@ -149,13 +158,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
 
     // Clear TTS audio cache when switching days or modes to free up browser memory
-    if (ttsAudioCacheRef.current) {
-      Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
-      ttsAudioCacheRef.current = {};
-    }
-    if (ttsAudioFetchingRef.current) {
-      ttsAudioFetchingRef.current = {};
-    }
+    clearGlobalTtsCache();
     setIsRateLimited(false);
     ttsSuspendedRef.current = false;
   }, [dayData, mode]);
@@ -193,13 +196,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         ttsAudioRef.current = null;
       }
       // Clean up cached audio URLs
-      if (ttsAudioCacheRef.current) {
-        Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
-        ttsAudioCacheRef.current = {};
-      }
-      if (ttsAudioFetchingRef.current) {
-        ttsAudioFetchingRef.current = {};
-      }
+      clearGlobalTtsCache();
     };
   }, []);
 
@@ -208,8 +205,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     if (ttsSuspendedRef.current) {
       throw new Error("429");
     }
-    if (!cleanText || !geminiApiKey || ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText]) {
-      return ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText];
+    if (!cleanText || !geminiApiKey || globalTtsAudioCache[cleanText] || globalTtsAudioFetching[cleanText]) {
+      return globalTtsAudioCache[cleanText] || globalTtsAudioFetching[cleanText];
     }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`;
@@ -281,19 +278,19 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       await saveCachedAudio(cleanText, blob);
 
       const audioUrl = URL.createObjectURL(blob);
-      ttsAudioCacheRef.current[cleanText] = audioUrl;
+      globalTtsAudioCache[cleanText] = audioUrl;
       console.log(`Prefetched & Cached in IndexedDB: "${cleanText}"`);
       
-      delete ttsAudioFetchingRef.current[cleanText];
+      delete globalTtsAudioFetching[cleanText];
       return audioUrl;
     })
     .catch(err => {
       console.warn(`Prefetch failed for: "${cleanText}"`, err);
-      delete ttsAudioFetchingRef.current[cleanText];
+      delete globalTtsAudioFetching[cleanText];
       throw err;
     });
 
-    ttsAudioFetchingRef.current[cleanText] = fetchPromise;
+    globalTtsAudioFetching[cleanText] = fetchPromise;
     return fetchPromise;
   };
 
@@ -311,14 +308,14 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       for (const item of dialogue) {
         if (isCancelled) return;
         const cleanText = item.en.replace(/\*/g, "").trim();
-        if (!ttsAudioCacheRef.current[cleanText]) {
+        if (!globalTtsAudioCache[cleanText]) {
           const cachedBlob = await getCachedAudio(cleanText);
           if (cachedBlob && !isCancelled) {
-            ttsAudioCacheRef.current[cleanText] = URL.createObjectURL(cachedBlob);
+            globalTtsAudioCache[cleanText] = URL.createObjectURL(cachedBlob);
             console.log(`Loaded from IndexedDB Cache: "${cleanText}"`);
           }
         }
-        if (ttsAudioCacheRef.current[cleanText]) {
+        if (globalTtsAudioCache[cleanText]) {
           loadedCount++;
           if (!isCancelled) {
             setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
@@ -344,7 +341,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           break;
         }
         const cleanText = item.en.replace(/\*/g, "").trim();
-        if (!ttsAudioCacheRef.current[cleanText] && !ttsAudioFetchingRef.current[cleanText]) {
+        if (!globalTtsAudioCache[cleanText] && !globalTtsAudioFetching[cleanText]) {
           try {
             await prefetchTTSAsync(cleanText);
             loadedCount++;
@@ -428,9 +425,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     }
 
     // 1. Play from in-memory cache if available
-    if (ttsAudioCacheRef.current[cleanText]) {
+    if (globalTtsAudioCache[cleanText]) {
       console.log(`Playing from memory cache for: "${cleanText}"`);
-      const audio = new Audio(ttsAudioCacheRef.current[cleanText]);
+      const audio = new Audio(globalTtsAudioCache[cleanText]);
       ttsAudioRef.current = audio;
       audio.play().catch(err => {
         console.warn("Cached audio play failed, falling back.", err);
@@ -440,9 +437,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     }
 
     // 2. Wait for ongoing background fetch if available
-    if (ttsAudioFetchingRef.current[cleanText]) {
+    if (globalTtsAudioFetching[cleanText]) {
       console.log(`Waiting for ongoing fetch for: "${cleanText}"`);
-      ttsAudioFetchingRef.current[cleanText]
+      globalTtsAudioFetching[cleanText]
         .then(audioUrl => {
           const audio = new Audio(audioUrl);
           ttsAudioRef.current = audio;
