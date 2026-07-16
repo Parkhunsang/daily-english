@@ -45,6 +45,52 @@ const createWavHeader = (pcmLength, sampleRate = 24000, numChannels = 1, bitsPer
   return new Uint8Array(header);
 };
 
+// Simple IndexedDB Helper for persistent caching of audio Blobs
+const openAudioDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open("DailyEnglishAudioDB", 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains("audio_cache")) {
+        db.createObjectStore("audio_cache");
+      }
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+
+const getCachedAudio = async (key) => {
+  try {
+    const db = await openAudioDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("audio_cache", "readonly");
+      const store = transaction.objectStore("audio_cache");
+      const request = store.get(key);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn("IndexedDB read error", e);
+    return null;
+  }
+};
+
+const saveCachedAudio = async (key, blob) => {
+  try {
+    const db = await openAudioDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction("audio_cache", "readwrite");
+      const store = transaction.objectStore("audio_cache");
+      const request = store.put(blob, key);
+      request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error);
+    });
+  } catch (e) {
+    console.warn("IndexedDB write error", e);
+  }
+};
+
 export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi, geminiApiKey }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
@@ -80,6 +126,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const streamRef = useRef(null);
   const ttsAudioRef = useRef(null);
   const ttsAudioCacheRef = useRef({}); // Cache for Gemini TTS Blob URLs
+  const ttsAudioFetchingRef = useRef({}); // Tracks ongoing fetch promises to prevent duplicate requests
 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
@@ -101,6 +148,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     if (ttsAudioCacheRef.current) {
       Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
       ttsAudioCacheRef.current = {};
+    }
+    if (ttsAudioFetchingRef.current) {
+      ttsAudioFetchingRef.current = {};
     }
   }, [dayData, mode]);
 
@@ -141,19 +191,23 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         Object.values(ttsAudioCacheRef.current).forEach(url => URL.revokeObjectURL(url));
         ttsAudioCacheRef.current = {};
       }
+      if (ttsAudioFetchingRef.current) {
+        ttsAudioFetchingRef.current = {};
+      }
     };
   }, []);
 
-  // Background pre-fetch helper for Gemini TTS
-  const prefetchTTS = (text) => {
-    const cleanText = text.replace(/\*/g, "").trim();
-    if (!cleanText || !geminiApiKey || ttsAudioCacheRef.current[cleanText]) return;
+  // Unified audio prefetch helper (downloads and persists to IndexedDB)
+  const prefetchTTSAsync = async (cleanText) => {
+    if (!cleanText || !geminiApiKey || ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText]) {
+      return ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText];
+    }
 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`;
     const payload = {
       contents: [{
         parts: [{
-          text: cleanText // Dedicated TTS model parses raw text directly & faster
+          text: cleanText
         }]
       }],
       generationConfig: {
@@ -168,7 +222,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       }
     };
 
-    fetch(url, {
+    const fetchPromise = fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -179,49 +233,87 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       if (!res.ok) throw new Error("status " + res.status);
       return res.json();
     })
-    .then(data => {
+    .then(async data => {
       const candidate = data.candidates?.[0];
       const partWithAudio = candidate?.content?.parts?.find(p => p.inlineData);
-      if (partWithAudio && partWithAudio.inlineData?.data) {
-        const base64Data = partWithAudio.inlineData.data;
-        const binaryString = atob(base64Data);
-        const pcmBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          pcmBytes[i] = binaryString.charCodeAt(i);
-        }
-        const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
-        const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
-        wavBytes.set(wavHeader, 0);
-        wavBytes.set(pcmBytes, wavHeader.length);
-
-        const blob = new Blob([wavBytes], { type: "audio/wav" });
-        const audioUrl = URL.createObjectURL(blob);
-        ttsAudioCacheRef.current[cleanText] = audioUrl;
-        console.log(`Prefetched audio for: "${cleanText}"`);
+      if (!partWithAudio || !partWithAudio.inlineData?.data) {
+        throw new Error("No audio data returned");
       }
+      const base64Data = partWithAudio.inlineData.data;
+      const binaryString = atob(base64Data);
+      const pcmBytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        pcmBytes[i] = binaryString.charCodeAt(i);
+      }
+      const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
+      const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
+      wavBytes.set(wavHeader, 0);
+      wavBytes.set(pcmBytes, wavHeader.length);
+
+      const blob = new Blob([wavBytes], { type: "audio/wav" });
+      
+      // Persist to IndexedDB
+      await saveCachedAudio(cleanText, blob);
+
+      const audioUrl = URL.createObjectURL(blob);
+      ttsAudioCacheRef.current[cleanText] = audioUrl;
+      console.log(`Prefetched & Cached in IndexedDB: "${cleanText}"`);
+      
+      delete ttsAudioFetchingRef.current[cleanText];
+      return audioUrl;
     })
     .catch(err => {
       console.warn(`Prefetch failed for: "${cleanText}"`, err);
+      delete ttsAudioFetchingRef.current[cleanText];
+      throw err;
     });
+
+    ttsAudioFetchingRef.current[cleanText] = fetchPromise;
+    return fetchPromise;
   };
 
-  // Prefetch active and lookahead sentences when activeTurnIndex changes
+  // Background loader: Loads IndexedDB audio and sequentially prefetches missing sentences
   useEffect(() => {
     if (!geminiApiKey || !dialogue) return;
-    
-    // 1. Prefetch current active sentence
-    if (activeTurnIndex < dialogue.length) {
-      prefetchTTS(dialogue[activeTurnIndex].en);
-    }
-    // 2. Prefetch next sentence (look ahead)
-    if (activeTurnIndex + 1 < dialogue.length) {
-      // Add slight delay for lookahead to prevent API congestion
-      const timer = setTimeout(() => {
-        prefetchTTS(dialogue[activeTurnIndex + 1].en);
-      }, 800);
-      return () => clearTimeout(timer);
-    }
-  }, [activeTurnIndex, dialogue, geminiApiKey]);
+
+    let isCancelled = false;
+
+    const loadAndPrefetchAll = async () => {
+      // 1. Scan and load existing audio from IndexedDB to memory (instant)
+      for (const item of dialogue) {
+        if (isCancelled) return;
+        const cleanText = item.en.replace(/\*/g, "").trim();
+        if (!ttsAudioCacheRef.current[cleanText]) {
+          const cachedBlob = await getCachedAudio(cleanText);
+          if (cachedBlob && !isCancelled) {
+            ttsAudioCacheRef.current[cleanText] = URL.createObjectURL(cachedBlob);
+            console.log(`Loaded from IndexedDB Cache: "${cleanText}"`);
+          }
+        }
+      }
+
+      // 2. Prefetch any missing sentences sequentially with a 1.5s delay to avoid rate limits
+      for (const item of dialogue) {
+        if (isCancelled) return;
+        const cleanText = item.en.replace(/\*/g, "").trim();
+        if (!ttsAudioCacheRef.current[cleanText] && !ttsAudioFetchingRef.current[cleanText]) {
+          try {
+            await prefetchTTSAsync(cleanText);
+            // Space calls by 1.5s to safely respect the 15 RPM free tier limit
+            await new Promise(resolve => setTimeout(resolve, 1500));
+          } catch (e) {
+            console.warn(`Sequential prefetch failed for "${cleanText}"`, e);
+          }
+        }
+      }
+    };
+
+    loadAndPrefetchAll();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [dialogue, geminiApiKey]);
 
   const handleSpeakTTS = (text, e) => {
     if (e) e.stopPropagation();
@@ -240,14 +332,12 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     const cleanText = text.replace(/\*/g, "").trim();
     if (!cleanText) return;
 
-    // Local native fallback function to keep code clean and prevent duplicate code blocks
+    // Fallback SpeechSynthesis voice playback
     const playFallback = () => {
       if ("speechSynthesis" in window) {
         const actualUtterance = new SpeechSynthesisUtterance(cleanText);
         actualUtterance.lang = "en-US";
         const voices = window.speechSynthesis.getVoices();
-        
-        console.log("Fallback SpeechSynthesis Voices available:", voices.map(v => `${v.name} (${v.lang})`));
         
         const usVoice = 
           voices.find(v => v.lang === "en-US" && v.name.includes("Google")) || 
@@ -256,7 +346,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           voices.find(v => v.lang.startsWith("en"));
 
         if (usVoice) {
-          console.log("Selected voice for fallback:", usVoice.name);
           actualUtterance.voice = usVoice;
         }
         window.speechSynthesis.speak(actualUtterance);
@@ -265,9 +354,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       }
     };
 
-    // 1. Check if cached
+    // 1. Play from in-memory cache if available
     if (ttsAudioCacheRef.current[cleanText]) {
-      console.log(`Playing from cache for: "${cleanText}"`);
+      console.log(`Playing from memory cache for: "${cleanText}"`);
       const audio = new Audio(ttsAudioCacheRef.current[cleanText]);
       ttsAudioRef.current = audio;
       audio.play().catch(err => {
@@ -277,87 +366,42 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       return;
     }
 
-    if (geminiApiKey) {
-      // Use Gemini API for high-quality audio generation
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiApiKey}`;
-      
-      const payload = {
-        contents: [{
-          parts: [{
-            text: cleanText // Simplified text prompt for faster processing
-          }]
-        }],
-        generationConfig: {
-          responseModalities: ["AUDIO"],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: "Aoede"
-              }
-            }
-          }
-        }
-      };
-
-      fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      })
-      .then(async res => {
-        if (!res.ok) {
-          try {
-            const errJson = await res.json();
-            console.error("Gemini API Error Response:", errJson);
-            throw new Error(`Gemini API error: ${res.status}`);
-          } catch (e) {
-            throw new Error(`Gemini API error: ${res.status}`);
-          }
-        }
-        return res.json();
-      })
-      .then(data => {
-        const candidate = data.candidates?.[0];
-        const partWithAudio = candidate?.content?.parts?.find(p => p.inlineData);
-        if (!partWithAudio || !partWithAudio.inlineData?.data) {
-          throw new Error("No audio data returned from Gemini API");
-        }
-        const base64Data = partWithAudio.inlineData.data;
-
-        // Convert base64 data to binary bytes (raw PCM bytes)
-        const binaryString = atob(base64Data);
-        const pcmBytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          pcmBytes[i] = binaryString.charCodeAt(i);
-        }
-
-        // Gemini returns raw PCM at 24000Hz (24kHz), 16-bit, 1 channel (mono)
-        const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
-        const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
-        wavBytes.set(wavHeader, 0);
-        wavBytes.set(pcmBytes, wavHeader.length);
-
-        const blob = new Blob([wavBytes], { type: "audio/wav" });
-        const audioUrl = URL.createObjectURL(blob);
-        
-        // Store in cache
-        ttsAudioCacheRef.current[cleanText] = audioUrl;
-
-        const audio = new Audio(audioUrl);
-        ttsAudioRef.current = audio;
-        audio.play().catch(err => {
-          console.warn("Gemini Audio play failed, falling back.", err);
+    // 2. Wait for ongoing background fetch if available
+    if (ttsAudioFetchingRef.current[cleanText]) {
+      console.log(`Waiting for ongoing fetch for: "${cleanText}"`);
+      ttsAudioFetchingRef.current[cleanText]
+        .then(audioUrl => {
+          const audio = new Audio(audioUrl);
+          ttsAudioRef.current = audio;
+          audio.play().catch(err => {
+            console.warn("Ongoing fetch play failed, falling back.", err);
+            playFallback();
+          });
+        })
+        .catch(err => {
+          console.warn("Ongoing fetch failed, falling back.", err);
           playFallback();
         });
-      })
-      .catch(err => {
-        console.warn("Gemini API call failed, falling back to browser synthesis.", err);
-        playFallback();
-      });
+      return;
+    }
+
+    // 3. Fallback to on-demand fetch (or native SpeechSynthesis if key is missing)
+    if (geminiApiKey) {
+      console.log(`On-demand fetch for: "${cleanText}"`);
+      prefetchTTSAsync(cleanText)
+        .then(audioUrl => {
+          const audio = new Audio(audioUrl);
+          ttsAudioRef.current = audio;
+          audio.play().catch(err => {
+            console.warn("On-demand play failed, falling back.", err);
+            playFallback();
+          });
+        })
+        .catch(err => {
+          console.warn("On-demand fetch failed, falling back.", err);
+          playFallback();
+        });
     } else {
-      // If no API key, use fallback browser speech synthesis directly
       playFallback();
     }
   };
