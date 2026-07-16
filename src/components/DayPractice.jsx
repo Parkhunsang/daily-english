@@ -4,6 +4,47 @@ import { Confetti } from "./Confetti";
 import { playSuccessSound, playFailureSound, getSharedAudioContext } from "../utils/audioSynth";
 import { askExternalAi } from "../utils/aiLauncher";
 
+// Helper to prepend standard WAV header to raw 16-bit mono 24kHz PCM data from Gemini
+const createWavHeader = (pcmLength, sampleRate = 24000, numChannels = 1, bitsPerSample = 16) => {
+  const header = new ArrayBuffer(44);
+  const view = new DataView(header);
+
+  const writeString = (v, offset, string) => {
+    for (let i = 0; i < string.length; i++) {
+      v.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+
+  /* RIFF identifier */
+  writeString(view, 0, 'RIFF');
+  /* file length */
+  view.setUint32(4, 36 + pcmLength, true);
+  /* RIFF type */
+  writeString(view, 8, 'WAVE');
+  /* format chunk identifier */
+  writeString(view, 12, 'fmt ');
+  /* format chunk length */
+  view.setUint32(16, 16, true);
+  /* sample format (raw PCM) */
+  view.setUint16(20, 1, true);
+  /* channel count */
+  view.setUint16(22, numChannels, true);
+  /* sample rate */
+  view.setUint32(24, sampleRate, true);
+  /* byte rate */
+  view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
+  /* block align */
+  view.setUint16(32, numChannels * (bitsPerSample / 8), true);
+  /* bits per sample */
+  view.setUint16(34, bitsPerSample, true);
+  /* data chunk identifier */
+  writeString(view, 36, 'data');
+  /* data chunk length */
+  view.setUint32(40, pcmLength, true);
+
+  return new Uint8Array(header);
+};
+
 export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, mode, onSwitchToSpeak, onSaveMedal, passingThreshold = 70, onDayCompleted, preferredAi, geminiApiKey }) {
   const dialogue = dayData.dialogue;
   const dayProgress = progress[dayData.day] || {};
@@ -181,16 +222,22 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           throw new Error("No audio data returned from Gemini API");
         }
         const base64Data = partWithAudio.inlineData.data;
-        const mimeType = partWithAudio.inlineData.mimeType || "audio/x-wav";
 
-        // Convert base64 data to binary bytes
+        // Convert base64 data to binary bytes (raw PCM bytes)
         const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
+        const pcmBytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
+          pcmBytes[i] = binaryString.charCodeAt(i);
         }
 
-        const blob = new Blob([bytes], { type: mimeType });
+        // Gemini returns raw PCM at 24000Hz (24kHz), 16-bit, 1 channel (mono)
+        // We must prepend a standard 44-byte WAV header so HTML5 Audio can play it natively
+        const wavHeader = createWavHeader(pcmBytes.length, 24000, 1, 16);
+        const wavBytes = new Uint8Array(wavHeader.length + pcmBytes.length);
+        wavBytes.set(wavHeader, 0);
+        wavBytes.set(pcmBytes, wavHeader.length);
+
+        const blob = new Blob([wavBytes], { type: "audio/wav" });
         const audioUrl = URL.createObjectURL(blob);
         const audio = new Audio(audioUrl);
         ttsAudioRef.current = audio;
