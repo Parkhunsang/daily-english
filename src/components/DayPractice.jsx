@@ -134,6 +134,14 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     };
 
     if (geminiApiKey) {
+      // Log available models for debugging
+      fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiApiKey}`)
+        .then(res => res.json())
+        .then(data => {
+          console.log("Supported Gemini Models list:", data.models?.map(m => m.name));
+        })
+        .catch(err => console.warn("Failed to list models", err));
+
       // Use Gemini API for high-quality audio generation
       const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${geminiApiKey}`;
       
