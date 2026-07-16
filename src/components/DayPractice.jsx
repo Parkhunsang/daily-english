@@ -121,6 +121,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   // Test Mode States
   const [hearts, setHearts] = useState(3);
   const [testStatus, setTestStatus] = useState("playing"); // "playing" | "passed" | "failed"
+  const [ttsLoadStatus, setTtsLoadStatus] = useState({ loaded: 0, total: dialogue.length, finished: false });
 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
@@ -143,6 +144,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setResult(null);
     setRevealedHints({});
     setIsTyping(false);
+    setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
 
     // Clear TTS audio cache when switching days or modes to free up browser memory
     if (ttsAudioCacheRef.current) {
@@ -277,8 +279,11 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     if (!geminiApiKey || !dialogue) return;
 
     let isCancelled = false;
+    const total = dialogue.length;
 
     const loadAndPrefetchAll = async () => {
+      let loadedCount = 0;
+
       // 1. Scan and load existing audio from IndexedDB to memory (instant)
       for (const item of dialogue) {
         if (isCancelled) return;
@@ -290,6 +295,20 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             console.log(`Loaded from IndexedDB Cache: "${cleanText}"`);
           }
         }
+        if (ttsAudioCacheRef.current[cleanText]) {
+          loadedCount++;
+          if (!isCancelled) {
+            setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
+          }
+        }
+      }
+
+      // If already fully loaded from cache, we're done!
+      if (loadedCount === total) {
+        if (!isCancelled) {
+          setTtsLoadStatus({ loaded: total, total, finished: true });
+        }
+        return;
       }
 
       // 2. Prefetch any missing sentences sequentially with a 1.5s delay to avoid rate limits
@@ -299,14 +318,26 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         if (!ttsAudioCacheRef.current[cleanText] && !ttsAudioFetchingRef.current[cleanText]) {
           try {
             await prefetchTTSAsync(cleanText);
+            loadedCount++;
+            if (!isCancelled) {
+              setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
+            }
             // Space calls by 1.5s to safely respect the 15 RPM free tier limit
             await new Promise(resolve => setTimeout(resolve, 1500));
           } catch (e) {
             console.warn(`Sequential prefetch failed for "${cleanText}"`, e);
+            // Count as loaded anyway to let progress finish in UI even if failed (will play fallback)
+            loadedCount++;
+            if (!isCancelled) {
+              setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
+            }
           }
         }
       }
     };
+
+    // Initialize state
+    setTtsLoadStatus({ loaded: 0, total, finished: false });
 
     loadAndPrefetchAll();
 
@@ -887,6 +918,64 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           )}
         </div>
       )}
+
+      {/* AI Pronunciation Cache Loader status badge */}
+      {geminiApiKey && !isCompleted && (
+        <div 
+          className="ai-tts-status-badge"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "6px",
+            fontSize: "11px",
+            fontWeight: "750",
+            padding: "5px 12px",
+            borderRadius: "20px",
+            alignSelf: "center",
+            marginTop: "8px",
+            marginBottom: "-4px",
+            background: ttsLoadStatus.finished 
+              ? "rgba(16, 185, 129, 0.08)"
+              : "rgba(124, 58, 237, 0.08)",
+            color: ttsLoadStatus.finished 
+              ? "var(--success-color, #10B981)" 
+              : "var(--accent-color, #7C3AED)",
+            border: ttsLoadStatus.finished
+              ? "1px solid rgba(16, 185, 129, 0.15)"
+              : "1px solid rgba(124, 58, 237, 0.15)",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+            animation: ttsLoadStatus.finished ? "none" : "ai-pulse 2s infinite ease-in-out",
+            transition: "all 0.4s ease",
+            zIndex: 10
+          }}
+        >
+          {ttsLoadStatus.finished ? (
+            <>
+              <span>🎙️ AI 발음 준비 완료</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+            </>
+          ) : (
+            <>
+              <span className="spinner-dot" style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", animation: "ping 1.5s infinite" }}></span>
+              <span>🎙️ AI 발음 준비 중... ({ttsLoadStatus.loaded}/{ttsLoadStatus.total})</span>
+            </>
+          )}
+        </div>
+      )}
+
+      <style>{`
+        @keyframes ai-pulse {
+          0%, 100% { opacity: 0.8; transform: scale(0.98); }
+          50% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes ping {
+          0% { transform: scale(1); opacity: 1; }
+          75%, 100% { transform: scale(2.5); opacity: 0; }
+        }
+      `}</style>
 
       {/* Card Stage / Carousel View */}
       {!isCompleted ? (
