@@ -135,7 +135,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
     if (geminiApiKey) {
       // Use Gemini API for high-quality audio generation
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-tts:generateContent?key=${geminiApiKey}`;
       
       const payload = {
         contents: [{
