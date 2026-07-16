@@ -162,8 +162,16 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         },
         body: JSON.stringify(payload)
       })
-      .then(res => {
-        if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
+      .then(async res => {
+        if (!res.ok) {
+          try {
+            const errJson = await res.json();
+            console.error("Gemini API Error Response:", errJson);
+            throw new Error(`Gemini API error: ${res.status} - ${errJson.error?.message || "Unknown"}`);
+          } catch (e) {
+            throw new Error(`Gemini API error: ${res.status}`);
+          }
+        }
         return res.json();
       })
       .then(data => {
