@@ -37,6 +37,7 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
+  const ttsAudioRef = useRef(null);
 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
@@ -79,34 +80,56 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     }
   }, [isCompleted, mode, dayData.day, dayData.title, onDayCompleted]);
 
-  // Clean up recording on unmount
+  // Clean up recording and TTS on unmount
   useEffect(() => {
     return () => {
       stopRecordingSession();
+      if (ttsAudioRef.current) {
+        ttsAudioRef.current.pause();
+        ttsAudioRef.current = null;
+      }
     };
   }, []);
 
   const handleSpeakTTS = (text, e) => {
     if (e) e.stopPropagation();
+
+    // Stop any currently playing TTS audio
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+
+    // Stop any ongoing native speech synthesis
     if ("speechSynthesis" in window) {
       window.speechSynthesis.cancel();
-      const cleanText = text.replace(/\*/g, "");
-      const utterance = new SynthesisUtteranceClass(cleanText);
-      function SynthesisUtteranceClass(t) {
-        return new (window.SpeechSynthesisUtterance || window.webkitSpeechSynthesisUtterance)(t);
-      }
-      const actualUtterance = new SpeechSynthesisUtterance(cleanText);
-      actualUtterance.lang = "en-US";
-      
-      const voices = window.speechSynthesis.getVoices();
-      const usVoice = voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en"));
-      if (usVoice) {
-        actualUtterance.voice = usVoice;
-      }
-      window.speechSynthesis.speak(actualUtterance);
-    } else {
-      alert("이 브라우저는 음성 합성(TTS)을 지원하지 않습니다.");
     }
+
+    const cleanText = text.replace(/\*/g, "").trim();
+    if (!cleanText) return;
+
+    // Use Google Translate TTS URL
+    const ttsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=en&client=tw-ob&q=${encodeURIComponent(cleanText)}`;
+    
+    const audio = new Audio(ttsUrl);
+    ttsAudioRef.current = audio;
+
+    audio.play().catch(err => {
+      console.warn("AI TTS playback failed, falling back to browser synthesis.", err);
+      // Fallback to browser's native speech synthesis
+      if ("speechSynthesis" in window) {
+        const actualUtterance = new SpeechSynthesisUtterance(cleanText);
+        actualUtterance.lang = "en-US";
+        const voices = window.speechSynthesis.getVoices();
+        const usVoice = voices.find(v => v.lang === "en-US") || voices.find(v => v.lang.startsWith("en"));
+        if (usVoice) {
+          actualUtterance.voice = usVoice;
+        }
+        window.speechSynthesis.speak(actualUtterance);
+      } else {
+        alert("이 브라우저는 음성 합성(TTS)을 지원하지 않습니다.");
+      }
+    });
   };
 
   const toggleHint = (index) => {
@@ -119,6 +142,15 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const startRecordingSession = () => {
     setResult(null);
     setIsRecording(true);
+
+    // Stop any playing TTS audio when recording starts
+    if (ttsAudioRef.current) {
+      ttsAudioRef.current.pause();
+      ttsAudioRef.current = null;
+    }
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+    }
 
     try {
       const ctx = getSharedAudioContext();
