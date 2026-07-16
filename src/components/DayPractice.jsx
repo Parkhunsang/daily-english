@@ -122,6 +122,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const [hearts, setHearts] = useState(3);
   const [testStatus, setTestStatus] = useState("playing"); // "playing" | "passed" | "failed"
   const [ttsLoadStatus, setTtsLoadStatus] = useState({ loaded: 0, total: dialogue.length, finished: false });
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const ttsSuspendedRef = useRef(false); // Ref for immediate sync checks inside loops
 
   const recognitionInstanceRef = useRef(null);
   const streamRef = useRef(null);
@@ -154,6 +156,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     if (ttsAudioFetchingRef.current) {
       ttsAudioFetchingRef.current = {};
     }
+    setIsRateLimited(false);
+    ttsSuspendedRef.current = false;
   }, [dayData, mode]);
 
   // Trigger typing indicator on B's turn change
@@ -201,6 +205,9 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
   // Unified audio prefetch helper (downloads and persists to IndexedDB)
   const prefetchTTSAsync = async (cleanText) => {
+    if (ttsSuspendedRef.current) {
+      throw new Error("429");
+    }
     if (!cleanText || !geminiApiKey || ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText]) {
       return ttsAudioCacheRef.current[cleanText] || ttsAudioFetchingRef.current[cleanText];
     }
@@ -231,8 +238,24 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
       },
       body: JSON.stringify(payload)
     })
-    .then(res => {
-      if (!res.ok) throw new Error("status " + res.status);
+    .then(async res => {
+      if (!res.ok) {
+        if (res.status === 429) {
+          ttsSuspendedRef.current = true;
+          setIsRateLimited(true);
+          // Auto-resume after 60 seconds of rest
+          setTimeout(() => {
+            ttsSuspendedRef.current = false;
+            setIsRateLimited(false);
+          }, 60000);
+          throw new Error("429");
+        }
+        try {
+          const errJson = await res.json();
+          console.error("Gemini API Error Response:", errJson);
+        } catch (e) {}
+        throw new Error(`Gemini API error: ${res.status}`);
+      }
       return res.json();
     })
     .then(async data => {
@@ -311,9 +334,15 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         return;
       }
 
-      // 2. Prefetch any missing sentences sequentially with a 1.5s delay to avoid rate limits
+      // 2. Prefetch any missing sentences sequentially with a 4.0s delay to avoid rate limits
       for (const item of dialogue) {
         if (isCancelled) return;
+        if (ttsSuspendedRef.current) {
+          if (!isCancelled) {
+            setTtsLoadStatus({ loaded: total, total, finished: true });
+          }
+          break;
+        }
         const cleanText = item.en.replace(/\*/g, "").trim();
         if (!ttsAudioCacheRef.current[cleanText] && !ttsAudioFetchingRef.current[cleanText]) {
           try {
@@ -322,11 +351,17 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
             if (!isCancelled) {
               setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
             }
-            // Space calls by 1.5s to safely respect the 15 RPM free tier limit
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            // Space calls by 4.0s to safely respect the 15 RPM free tier limit
+            await new Promise(resolve => setTimeout(resolve, 4000));
           } catch (e) {
+            if (e.message.includes("429")) {
+              console.warn("Rate limit hit, stopping prefetch loop.");
+              if (!isCancelled) {
+                setTtsLoadStatus({ loaded: total, total, finished: true });
+              }
+              break; // Halt background loop completely
+            }
             console.warn(`Sequential prefetch failed for "${cleanText}"`, e);
-            // Count as loaded anyway to let progress finish in UI even if failed (will play fallback)
             loadedCount++;
             if (!isCancelled) {
               setTtsLoadStatus({ loaded: loadedCount, total, finished: loadedCount === total });
@@ -384,6 +419,13 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
         alert("이 브라우저는 음성 합성(TTS)을 지원하지 않습니다.");
       }
     };
+
+    // If rate limited or suspended, directly play fallback to save API requests
+    if (isRateLimited || ttsSuspendedRef.current) {
+      console.log("TTS suspended due to rate limit, playing fallback directly.");
+      playFallback();
+      return;
+    }
 
     // 1. Play from in-memory cache if available
     if (ttsAudioCacheRef.current[cleanText]) {
@@ -921,49 +963,75 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
       {/* AI Pronunciation Cache Loader status badge */}
       {geminiApiKey && !isCompleted && (
-        <div 
-          className="ai-tts-status-badge"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "6px",
-            fontSize: "11px",
-            fontWeight: "750",
-            padding: "5px 12px",
-            borderRadius: "20px",
-            alignSelf: "center",
-            marginTop: "8px",
-            marginBottom: "-4px",
-            background: ttsLoadStatus.finished 
-              ? "rgba(16, 185, 129, 0.08)"
-              : "rgba(124, 58, 237, 0.08)",
-            color: ttsLoadStatus.finished 
-              ? "var(--success-color, #10B981)" 
-              : "var(--accent-color, #7C3AED)",
-            border: ttsLoadStatus.finished
-              ? "1px solid rgba(16, 185, 129, 0.15)"
-              : "1px solid rgba(124, 58, 237, 0.15)",
-            boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
-            animation: ttsLoadStatus.finished ? "none" : "ai-pulse 2s infinite ease-in-out",
-            transition: "all 0.4s ease",
-            zIndex: 10
-          }}
-        >
-          {ttsLoadStatus.finished ? (
-            <>
-              <span>🎙️ AI 발음 준비 완료</span>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor" stroke="currentColor" strokeWidth="1.5"/>
-              </svg>
-            </>
-          ) : (
-            <>
-              <span className="spinner-dot" style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", animation: "ping 1.5s infinite" }}></span>
-              <span>🎙️ AI 발음 준비 중... ({ttsLoadStatus.loaded}/{ttsLoadStatus.total})</span>
-            </>
-          )}
-        </div>
+        isRateLimited ? (
+          <div 
+            className="ai-tts-status-badge rate-limited"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              fontSize: "11px",
+              fontWeight: "750",
+              padding: "5px 12px",
+              borderRadius: "20px",
+              alignSelf: "center",
+              marginTop: "8px",
+              marginBottom: "-4px",
+              background: "rgba(245, 158, 11, 0.08)",
+              color: "var(--warning-color, #F59E0B)",
+              border: "1px solid rgba(245, 158, 11, 0.15)",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+              zIndex: 10
+            }}
+          >
+            <span>⚠️ 시스템 음성 대체 (호출 한도 초과)</span>
+          </div>
+        ) : (
+          <div 
+            className="ai-tts-status-badge"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+              fontSize: "11px",
+              fontWeight: "750",
+              padding: "5px 12px",
+              borderRadius: "20px",
+              alignSelf: "center",
+              marginTop: "8px",
+              marginBottom: "-4px",
+              background: ttsLoadStatus.finished 
+                ? "rgba(16, 185, 129, 0.08)"
+                : "rgba(124, 58, 237, 0.08)",
+              color: ttsLoadStatus.finished 
+                ? "var(--success-color, #10B981)" 
+                : "var(--accent-color, #7C3AED)",
+              border: ttsLoadStatus.finished
+                ? "1px solid rgba(16, 185, 129, 0.15)"
+                : "1px solid rgba(124, 58, 237, 0.15)",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+              animation: ttsLoadStatus.finished ? "none" : "ai-pulse 2s infinite ease-in-out",
+              transition: "all 0.4s ease",
+              zIndex: 10
+            }}
+          >
+            {ttsLoadStatus.finished ? (
+              <>
+                <span>🎙️ AI 발음 준비 완료</span>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 16.17L4.83 12L3.41 13.41L9 19L21 7L19.59 5.59L9 16.17Z" fill="currentColor" stroke="currentColor" strokeWidth="1.5"/>
+                </svg>
+              </>
+            ) : (
+              <>
+                <span className="spinner-dot" style={{ display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "currentColor", animation: "ping 1.5s infinite" }}></span>
+                <span>🎙️ AI 발음 준비 중... ({ttsLoadStatus.loaded}/{ttsLoadStatus.total})</span>
+              </>
+            )}
+          </div>
+        )
       )}
 
       <style>{`
