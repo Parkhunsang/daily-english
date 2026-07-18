@@ -143,7 +143,15 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
   const activeSentence = activeTurnIndex < dialogue.length ? dialogue[activeTurnIndex] : null;
   const isCompleted = activeTurnIndex === dialogue.length;
 
-  // Update active turn index if dayData changes or mode changes
+  // Clear TTS audio cache only when dayData (date) changes, to preserve cache across mode switches (preview <-> speak)
+  useEffect(() => {
+    clearGlobalTtsCache();
+    setIsRateLimited(false);
+    ttsSuspendedRef.current = false;
+    setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
+  }, [dayData]);
+
+  // Update active turn index and UI states if dayData changes or mode changes
   useEffect(() => {
     if (mode === "test") {
       setActiveTurnIndex(0);
@@ -155,12 +163,6 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setResult(null);
     setRevealedHints({});
     setIsTyping(false);
-    setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
-
-    // Clear TTS audio cache when switching days or modes to free up browser memory
-    clearGlobalTtsCache();
-    setIsRateLimited(false);
-    ttsSuspendedRef.current = false;
   }, [dayData, mode]);
 
   // Trigger typing indicator on B's turn change
@@ -302,6 +304,13 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     const total = dialogue.length;
 
     const loadAndPrefetchAll = async () => {
+      // If already suspended due to 429 rate limits, do not invoke API queries to prevent extending rate-limit window
+      if (ttsSuspendedRef.current) {
+        setIsRateLimited(true);
+        setTtsLoadStatus(prev => ({ ...prev, finished: true }));
+        return;
+      }
+
       let loadedCount = 0;
 
       // 1. Scan and load existing audio from IndexedDB to memory (instant)
