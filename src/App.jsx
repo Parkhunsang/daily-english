@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { DAILY_DATA } from "./data";
 import { DayList } from "./components/DayList";
 import { DayPractice } from "./components/DayPractice";
@@ -35,6 +35,7 @@ function App() {
   const [preferredAi, setPreferredAi] = useState("chatgpt");
   const [geminiApiKey, setGeminiApiKey] = useState("");
   const [practiceStartTime, setPracticeStartTime] = useState(null);
+  const lastSyncTimeRef = useRef(0);
 
   // Load progress, custom dialogues, medals, sensitivity, and streak from LocalStorage on mount
   useEffect(() => {
@@ -202,6 +203,14 @@ function App() {
 
   // Streak counter tracking system
   const handleDayCompleted = (dayNum, dayTitle) => {
+    const now = Date.now();
+    // Guard against duplicate triggers within 5 seconds
+    if (now - lastSyncTimeRef.current < 5000) {
+      console.log("Ignored duplicate handleDayCompleted trigger within 5 seconds.");
+      return;
+    }
+    lastSyncTimeRef.current = now;
+
     const todayStr = new Date().toLocaleDateString("en-CA");
     const lastCompleteDate = localStorage.getItem("daily_english_last_complete_date");
     

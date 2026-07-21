@@ -151,8 +151,11 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
   }, [dayData]);
 
+  const completedTriggeredRef = useRef(false);
+
   // Update active turn index and UI states if dayData changes or mode changes
   useEffect(() => {
+    completedTriggeredRef.current = false;
     if (mode === "test") {
       setActiveTurnIndex(0);
       setHearts(3);
@@ -163,6 +166,12 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
     setResult(null);
     setRevealedHints({});
     setIsTyping(false);
+    setTtsLoadStatus({ loaded: 0, total: dialogue.length, finished: false });
+
+    // Clear TTS audio cache when switching days or modes to free up browser memory
+    clearGlobalTtsCache();
+    setIsRateLimited(false);
+    ttsSuspendedRef.current = false;
   }, [dayData, mode]);
 
   // Trigger typing indicator on B's turn change
@@ -182,7 +191,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
 
   // Trigger day completion callback (streak) when completed in Practice mode
   useEffect(() => {
-    if (isCompleted && mode !== "test") {
+    if (isCompleted && mode !== "test" && !completedTriggeredRef.current) {
+      completedTriggeredRef.current = true;
       if (onDayCompleted) {
         onDayCompleted(dayData.day, dayData.title);
       }
@@ -730,7 +740,8 @@ export function DayPractice({ dayData, progress, onMarkSentenceCorrect, onBack, 
           if (onSaveMedal) {
             onSaveMedal(dayData.day, medalType);
           }
-          if (onDayCompleted) {
+          if (onDayCompleted && !completedTriggeredRef.current) {
+            completedTriggeredRef.current = true;
             onDayCompleted(dayData.day, dayData.title);
           }
           setTestStatus("passed");
