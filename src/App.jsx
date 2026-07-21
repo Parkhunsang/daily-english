@@ -68,18 +68,25 @@ function App() {
       if (storedStreak) {
         setStreak(parseInt(storedStreak, 10));
       }
-      const storedUrl = localStorage.getItem("daily_english_supabase_url");
+      const envUrl = import.meta.env.VITE_SUPABASE_URL || "";
+      const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+      const envGeminiKey = import.meta.env.VITE_GEMINI_API_KEY || "";
+
+      const storedUrl = localStorage.getItem("daily_english_supabase_url") || envUrl;
       if (storedUrl) {
         setSupabaseUrl(storedUrl);
       }
-      const storedKey = localStorage.getItem("daily_english_supabase_key");
+      const storedKey = localStorage.getItem("daily_english_supabase_key") || envKey;
       if (storedKey) {
         setSupabaseKey(storedKey);
       }
       const storedSync = localStorage.getItem("daily_english_supabase_sync_enabled");
-      if (storedSync) {
+      if (storedSync !== null) {
         setSyncEnabled(storedSync === "true");
+      } else if (storedUrl && storedKey) {
+        setSyncEnabled(true); // Default to automatic sync enabled
       }
+
       const storedPreferredAi = localStorage.getItem("daily_english_preferred_ai");
       if (storedPreferredAi) {
         setPreferredAi(storedPreferredAi);
@@ -87,6 +94,8 @@ function App() {
       const storedGeminiKey = localStorage.getItem("daily_english_gemini_key");
       if (storedGeminiKey) {
         setGeminiApiKey(decodeKey(storedGeminiKey));
+      } else if (envGeminiKey) {
+        setGeminiApiKey(envGeminiKey);
       }
     } catch (e) {
       console.error("Failed to load data from localStorage", e);
