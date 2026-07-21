@@ -6,7 +6,7 @@ import { createClient } from '@supabase/supabase-js';
 export async function syncEventToScheduler(dayNum, dayTitle, supabaseUrl, supabaseKey, startTime, endTime) {
   if (!supabaseUrl || !supabaseKey) {
     console.warn("Supabase integration skipped: URL or Key is missing.");
-    return { success: false, error: "Supabase 연동 설정이 비어 있습니다." };
+    return { success: false, error: "Supabase URL 또는 Publishable Key가 비어 있습니다. 설정(⚙️)에서 입력해 주세요." };
   }
 
   // Use endTime (completion time) as the date of the event

@@ -108,6 +108,25 @@ function App() {
     localStorage.setItem("daily_english_supabase_sync_enabled", String(val));
   };
 
+  const handleTestSchedulerSync = async () => {
+    if (!syncEnabled) {
+      alert("⚠️ 먼저 'Supabase 클라우드 연동' 스위치를 활성화(체크)해 주세요.");
+      return;
+    }
+    if (!supabaseUrl || !supabaseKey) {
+      alert("⚠️ Supabase URL과 Publishable Key를 먼저 입력해 주세요.");
+      return;
+    }
+    const testDay = activeDay || 14;
+    const testTitle = dayDataList.find(d => String(d.day) === String(testDay))?.title || "스케줄러 연동 테스트";
+    const res = await syncEventToScheduler(testDay, testTitle, supabaseUrl, supabaseKey, new Date(Date.now() - 10 * 60 * 1000), new Date());
+    if (res.success) {
+      alert(`✅ Supabase 연동 테스트 성공!\n\nDaily-schedule DB(scheduler_events)에 Day ${testDay} (${testTitle}) 이벤트가 정상 추가되었습니다.`);
+    } else {
+      alert(`❌ Supabase 연동 테스트 실패!\n\n오류 원인: ${res.error}`);
+    }
+  };
+
   const handlePreferredAiChange = (val) => {
     setPreferredAi(val);
     localStorage.setItem("daily_english_preferred_ai", val);
@@ -181,16 +200,20 @@ function App() {
 
     // Trigger Scheduler Sync if enabled
     if (syncEnabled) {
-      const title = dayTitle || dayDataList.find(d => d.day === dayNum)?.title || "영어 회화";
+      const title = dayTitle || dayDataList.find(d => String(d.day) === String(dayNum))?.title || "영어 회화";
       const start = practiceStartTime || new Date(Date.now() - 20 * 60 * 1000); // 20m fallback
       const end = new Date();
       syncEventToScheduler(dayNum, title, supabaseUrl, supabaseKey, start, end).then(res => {
         if (res.success) {
           console.log("스케줄러 연동 성공!");
+          alert(`📅 Daily-schedule에 오늘의 학습(Day ${dayNum} - ${title})이 성공적으로 등록되었습니다!`);
         } else {
           console.warn("스케줄러 연동 실패:", res.error);
+          alert(`⚠️ Daily-schedule 연동 실패:\n${res.error}\n\n설정(⚙️) 메뉴에서 Supabase URL과 Key를 확인해 주세요.`);
         }
       });
+    } else {
+      console.log("Supabase 연동이 비활성화 상태입니다. (설정에서 활성화 필요)");
     }
 
     if (lastCompleteDate === todayStr) {
@@ -711,6 +734,26 @@ function App() {
               <div style={{ fontSize: "10px", color: "var(--text-muted)", marginTop: "4px", lineHeight: "1.4", textAlign: "left", fontWeight: "600" }}>
                 * Supabase 프로젝트 API 설정에서 확인한 URL 및 Publishable Key를 입력해 주세요.
               </div>
+              <button
+                onClick={handleTestSchedulerSync}
+                style={{
+                  marginTop: "6px",
+                  padding: "8px 12px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "var(--accent-color)",
+                  color: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: "750",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px"
+                }}
+              >
+                ⚡ Daily-schedule 연동 즉시 테스트
+              </button>
             </div>
           )}
         </div>
