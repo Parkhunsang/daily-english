@@ -45,7 +45,16 @@ function App() {
       }
       const storedCustomData = localStorage.getItem("daily_english_custom_dialogues");
       if (storedCustomData) {
-        setDayDataList(JSON.parse(storedCustomData));
+        const parsedCustom = JSON.parse(storedCustomData);
+        const customDays = new Set(parsedCustom.map((d) => d.day));
+        const missingFromDefault = DAILY_DATA.filter((d) => !customDays.has(d.day));
+        if (missingFromDefault.length > 0) {
+          const merged = [...parsedCustom, ...missingFromDefault].sort((a, b) => a.day - b.day);
+          setDayDataList(merged);
+          localStorage.setItem("daily_english_custom_dialogues", JSON.stringify(merged));
+        } else {
+          setDayDataList(parsedCustom);
+        }
       }
       const storedMedals = localStorage.getItem("daily_english_medals");
       if (storedMedals) {
@@ -221,18 +230,35 @@ function App() {
           throw new Error("필수 학습 속성(day, title, dialogue)이 누락되었습니다.");
         }
 
-        localStorage.setItem("daily_english_custom_dialogues", JSON.stringify(parsed));
-        setDayDataList(parsed);
+        const isAppend = window.confirm(
+          `불러온 대본(${parsed.length}일치)을 기존 대본 뒤에 '누적 추가'하시겠습니까?\n\n` +
+          `• [확인] : 기존 대본 유지 + 이어서 누적 추가 (Day 11, 12...)\n` +
+          `• [취소] : 기존 대본 전체 삭제 후 새로 교체`
+        );
+
+        let newList;
+        if (isAppend) {
+          const maxDay = dayDataList.reduce((max, d) => Math.max(max, d.day || 0), 0);
+          const reindexed = parsed.map((item, idx) => ({
+            ...item,
+            day: maxDay + idx + 1,
+          }));
+          newList = [...dayDataList, ...reindexed];
+        } else {
+          newList = parsed;
+          localStorage.removeItem("daily_english_progress");
+          localStorage.removeItem("daily_english_medals");
+          localStorage.removeItem("daily_english_streak");
+          localStorage.removeItem("daily_english_last_complete_date");
+          setProgress({});
+          setMedals({});
+          setStreak(0);
+        }
+
+        localStorage.setItem("daily_english_custom_dialogues", JSON.stringify(newList));
+        setDayDataList(newList);
         
-        localStorage.removeItem("daily_english_progress");
-        localStorage.removeItem("daily_english_medals");
-        localStorage.removeItem("daily_english_streak");
-        localStorage.removeItem("daily_english_last_complete_date");
-        setProgress({});
-        setMedals({});
-        setStreak(0);
-        
-        alert(`총 ${parsed.length}일치의 대본 데이터가 성공적으로 탑재되었습니다!`);
+        alert(`총 ${newList.length}일치의 대본 데이터가 설정되었습니다! (${isAppend ? "누적 추가 완료" : "새로 교체 완료"})`);
         setShowSettings(false);
       } catch (err) {
         alert(`불러오기 실패: ${err.message}`);
@@ -701,7 +727,7 @@ function App() {
             <div className="icon-box">📥</div>
             <div className="text-box">
               <span className="title" style={{ color: "var(--accent-color)" }}>대본 파일 불러오기 (Import)</span>
-              <span className="desc">소장 중인 JSON 파일을 불러와 즉시 교체합니다.</span>
+              <span className="desc">소장 중인 JSON 파일을 불러와 누적 추가하거나 교체합니다.</span>
             </div>
           </label>
 
